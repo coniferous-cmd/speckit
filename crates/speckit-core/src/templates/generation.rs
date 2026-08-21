@@ -1,0 +1,369 @@
+//! Unified skill generation.
+//!
+//! This module is the single canonical source for skill templates and the
+//! `SKILL.md` content emitted to disk. `init`, `update`, profile sync, and
+//! migration all consume it; nothing else should hand-roll frontmatter or
+//! duplicate the workflow list. The shape mirrors `openspec/src/core/shared/skill-generation.ts`
+//! so the two implementations stay structurally aligned: every OpenSpec
+//! workflow has exactly one Speckit counterpart, and brand substitution
+//! (`openspec` -> `speckit`, `OpenSpec` -> `Speckit`) is the only content delta.
+
+use std::collections::HashMap;
+
+/// Skill template with directory name and workflow ID mapping.
+///
+/// Mirrors OpenSpec's `SkillTemplateEntry` so parity tests can compare one entry
+/// at a time.
+#[derive(Debug, Clone)]
+pub struct SkillTemplateEntry {
+    pub template: super::types::SkillTemplate,
+    pub dir_name: String,
+    pub workflow_id: String,
+}
+
+/// Returns every canonical Speckit skill template, optionally filtered to a
+/// subset of workflow ids.
+///
+/// The default (no filter) set is the 12 OpenSpec workflows. Filter values come
+/// from `migration::ALL_WORKFLOWS` (and must be `String` to keep the public API
+/// flexible across profile/CLI layers).
+pub fn get_skill_templates(workflow_filter: Option<&[String]>) -> Vec<SkillTemplateEntry> {
+    let all: Vec<SkillTemplateEntry> = vec![
+        entry("explore", super::workflows::get_explore_skill_template()),
+        entry("new", super::workflows::get_new_change_skill_template()),
+        entry(
+            "continue",
+            super::workflows::get_continue_change_skill_template(),
+        ),
+        entry("apply", super::workflows::get_apply_change_skill_template()),
+        entry(
+            "update",
+            super::workflows::get_update_change_skill_template(),
+        ),
+        entry("ff", super::workflows::get_ff_change_skill_template()),
+        entry("sync", super::workflows::get_sync_specs_skill_template()),
+        entry(
+            "archive",
+            super::workflows::get_archive_change_skill_template(),
+        ),
+        entry(
+            "bulk-archive",
+            super::workflows::get_bulk_archive_change_skill_template(),
+        ),
+        entry(
+            "verify",
+            super::workflows::get_verify_change_skill_template(),
+        ),
+        entry("onboard", super::workflows::get_onboard_skill_template()),
+        entry("propose", super::workflows::get_propose_skill_template()),
+    ];
+
+    let Some(filter) = workflow_filter else {
+        return all;
+    };
+
+    let filter_set: std::collections::HashSet<&str> =
+        filter.iter().map(|s| s.as_str()).collect();
+    all.into_iter()
+        .filter(|e| filter_set.contains(e.workflow_id.as_str()))
+        .collect()
+}
+
+fn entry(workflow_id: &str, template: super::types::SkillTemplate) -> SkillTemplateEntry {
+    let dir_name = template.name.clone();
+    SkillTemplateEntry {
+        template,
+        dir_name,
+        workflow_id: workflow_id.to_string(),
+    }
+}
+
+/// Generates skill file content with YAML frontmatter, mirroring
+/// `openspec/src/core/shared/skill-generation.ts:generateSkillContent`.
+///
+/// `generated_by_version` is embedded as `metadata.generatedBy` so the version
+/// that produced the file can be detected later (used by update to decide
+/// whether to regenerate).
+///
+/// `transform_instructions` is applied to the template body before emission;
+/// the surface-specific generators use it to swap `/opsx:*` -> `/speckit:*`
+/// in the embedded slash-command references for command templates, and to
+/// apply brand substitution when content is generated for verification.
+pub fn generate_skill_content(
+    template: &super::types::SkillTemplate,
+    generated_by_version: &str,
+    transform_instructions: Option<&dyn Fn(&str) -> String>,
+) -> String {
+    let instructions = match transform_instructions {
+        Some(f) => f(template.instructions.as_str()),
+        None => template.instructions.clone(),
+    };
+
+    let license = template.license.as_deref().unwrap_or("MIT");
+    let compatibility = template
+        .compatibility
+        .as_deref()
+        .unwrap_or("Requires speckit CLI.");
+    let author = template
+        .metadata
+        .as_ref()
+        .and_then(|m| m.get("author"))
+        .map(|s| s.as_str())
+        .unwrap_or("speckit");
+    let version = template
+        .metadata
+        .as_ref()
+        .and_then(|m| m.get("version"))
+        .map(|s| s.as_str())
+        .unwrap_or("1.0");
+
+    let mut out = String::new();
+    out.push_str("---\n");
+    out.push_str(&format!("name: {}\n", template.name));
+    out.push_str(&format!("description: {}\n", template.description));
+    out.push_str(&format!("allowed-tools: {}\n", SPECKIT_CLI_ALLOWED_TOOLS));
+    out.push_str(&format!("license: {}\n", license));
+    out.push_str(&format!("compatibility: {}\n", compatibility));
+    out.push_str("metadata:\n");
+    out.push_str(&format!("  author: {}\n", author));
+    out.push_str(&format!("  version: \"{}\"\n", version));
+    out.push_str(&format!(
+        "  generatedBy: \"{}\"\n",
+        escape_yaml_string(generated_by_version)
+    ));
+    out.push_str("---\n");
+    out.push('\n');
+    out.push_str(&instructions);
+    out.push('\n');
+    out
+}
+
+/// The `allowed-tools` frontmatter value emitted by Speckit.
+///
+/// Mirrors `OPENSPEC_CLI_ALLOWED_TOOLS` in OpenSpec so the field is recognized
+/// by Claude Code and other Agent-Skills-aware tools as the CLI allowlist.
+pub const SPECKIT_CLI_ALLOWED_TOOLS: &str = "Bash(speckit:*)";
+
+/// Returns the current Speckit version, suitable for embedding in
+/// `metadata.generatedBy` and detecting stale generated skills during update.
+///
+/// Uses `CARGO_PKG_VERSION` from the speckit-core crate. The same value is
+/// used by `version_check.rs`, so generated files are always tagged with the
+/// running CLI's version.
+pub fn speckit_generated_by_version() -> String {
+    env!("CARGO_PKG_VERSION").to_string()
+}
+
+/// Escape a string for safe inclusion inside double-quoted YAML scalars.
+///
+/// Only used for `generatedBy` (which is always a SemVer string) but kept
+/// defensive in case that ever changes. Mirrors the safe-subset handling in
+/// OpenSpec's `generateSkillContent`.
+fn escape_yaml_string(input: &str) -> String {
+    input
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('\n', "\\n")
+        .replace('\r', "\\r")
+        .replace('\t', "\\t")
+}
+
+/// Returns the canonical set of skill directories under the tool's skills root
+/// that Speckit owns. Used by init/update to know which directories to clean up
+/// when a workflow is removed from the registry.
+pub fn managed_skill_dir_names() -> Vec<String> {
+    get_skill_templates(None)
+        .into_iter()
+        .map(|e| e.dir_name)
+        .collect()
+}
+
+/// Metadata extracted from a generated `SKILL.md` frontmatter.
+///
+/// Used by update to decide whether an existing file is up to date without
+/// comparing the full body byte-for-byte.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParsedSkillFrontmatter {
+    pub name: String,
+    pub generated_by: Option<String>,
+    pub version: Option<String>,
+}
+
+/// Parses the YAML frontmatter from a generated `SKILL.md`.
+///
+/// Returns `None` if the file does not start with `---` or the frontmatter
+/// block is malformed. Used by update's stale-detection step.
+pub fn parse_skill_frontmatter(content: &str) -> Option<ParsedSkillFrontmatter> {
+    let trimmed = content.strip_prefix("---")?;
+    let rest = trimmed.strip_prefix('\n')?;
+    let end = rest.find("\n---")?;
+    let fm = &rest[..end];
+
+    let mut name: Option<String> = None;
+    let mut generated_by: Option<String> = None;
+    let mut version: Option<String> = None;
+    let mut in_metadata = false;
+
+    for line in fm.lines() {
+        let line = line.trim_end();
+        if line.is_empty() {
+            continue;
+        }
+        if line.starts_with("metadata:") {
+            in_metadata = true;
+            continue;
+        }
+        if !in_metadata {
+            if let Some((k, v)) = split_kv(line) {
+                if k == "name" {
+                    name = Some(v.to_string());
+                }
+            }
+            continue;
+        }
+        // Inside metadata: keys are indented.
+        let (k, v) = match split_kv(line) {
+            Some(kv) => kv,
+            None => continue,
+        };
+        match k {
+            "version" => version = Some(v.trim_matches('"').to_string()),
+            "generatedBy" => generated_by = Some(v.trim_matches('"').to_string()),
+            _ => {}
+        }
+    }
+
+    Some(ParsedSkillFrontmatter {
+        name: name?,
+        generated_by,
+        version,
+    })
+}
+
+fn split_kv(line: &str) -> Option<(&str, &str)> {
+    let idx = line.find(':')?;
+    let key = line[..idx].trim();
+    let value = line[idx + 1..].trim();
+    Some((key, value))
+}
+
+/// Build the frontmatter-only metadata block used to detect managed skills
+/// during update. The map is sorted alphabetically so its hash is stable.
+pub fn frontmatter_metadata_for_hash(template: &super::types::SkillTemplate) -> HashMap<String, String> {
+    let mut out: HashMap<String, String> = HashMap::new();
+    if let Some(m) = &template.metadata {
+        for (k, v) in m {
+            out.insert(k.clone(), v.clone());
+        }
+    }
+    out.insert("generatedBy".into(), speckit_generated_by_version());
+    out.insert("tool".into(), "speckit".into());
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn get_skill_templates_default_returns_twelve() {
+        let all = get_skill_templates(None);
+        assert_eq!(all.len(), 12);
+    }
+
+    #[test]
+    fn get_skill_templates_filter_returns_subset() {
+        let filter = vec!["explore".to_string(), "apply".to_string()];
+        let picked = get_skill_templates(Some(&filter));
+        assert_eq!(picked.len(), 2);
+        let ids: Vec<&str> = picked.iter().map(|e| e.workflow_id.as_str()).collect();
+        assert!(ids.contains(&"explore"));
+        assert!(ids.contains(&"apply"));
+    }
+
+    #[test]
+    fn get_skill_templates_filter_unknown_workflow_excluded() {
+        let filter = vec!["nonexistent".to_string()];
+        let picked = get_skill_templates(Some(&filter));
+        assert!(picked.is_empty());
+    }
+
+    #[test]
+    fn workflow_id_matches_dir_name_pattern() {
+        let all = get_skill_templates(None);
+        for entry in &all {
+            assert!(
+                entry.dir_name.starts_with("speckit-"),
+                "dir {} should start with speckit-",
+                entry.dir_name
+            );
+            assert!(
+                !entry.dir_name.contains("openspec"),
+                "dir {} should not contain openspec",
+                entry.dir_name
+            );
+        }
+    }
+
+    #[test]
+    fn frontmatter_includes_generated_by() {
+        let all = get_skill_templates(None);
+        let first = &all[0].template;
+        let content = generate_skill_content(first, "1.9.0", None);
+        assert!(content.starts_with("---\n"));
+        assert!(content.contains("name: "));
+        assert!(content.contains("description: "));
+        assert!(content.contains("allowed-tools: Bash(speckit:*)"));
+        assert!(content.contains("license: MIT"));
+        assert!(content.contains("compatibility: Requires speckit CLI."));
+        assert!(content.contains("author: speckit"));
+        assert!(content.contains("version: \"1.0\""));
+        assert!(content.contains("generatedBy: \"1.9.0\""));
+    }
+
+    #[test]
+    fn transform_instructions_applies() {
+        let all = get_skill_templates(None);
+        let template = &all[0].template;
+        let transformed = generate_skill_content(
+            template,
+            "1.9.0",
+            Some(&|s| format!("[WRAP] {}", s)),
+        );
+        assert!(transformed.contains("[WRAP] "));
+        // The transformed body must equal the wrapped version of the original.
+        let expected_body = format!("[WRAP] {}", template.instructions);
+        assert!(transformed.contains(&expected_body[..40]));
+    }
+
+    #[test]
+    fn parse_skill_frontmatter_round_trip() {
+        let all = get_skill_templates(None);
+        let template = &all[0].template.clone();
+        let content = generate_skill_content(&template, "1.9.0", None);
+        let parsed = parse_skill_frontmatter(&content).expect("frontmatter present");
+        assert_eq!(parsed.name, template.name);
+        assert_eq!(parsed.generated_by.as_deref(), Some("1.9.0"));
+        assert_eq!(parsed.version.as_deref(), Some("1.0"));
+    }
+
+    #[test]
+    fn parse_skill_frontmatter_handles_no_block() {
+        let parsed = parse_skill_frontmatter("no frontmatter here");
+        assert!(parsed.is_none());
+    }
+
+    #[test]
+    fn speckit_generated_by_version_is_semver() {
+        let v = speckit_generated_by_version();
+        assert!(!v.is_empty());
+        let parts: Vec<&str> = v.split('.').collect();
+        assert!(parts.len() >= 3, "expected SemVer-ish, got {v}");
+    }
+
+    #[test]
+    fn managed_skill_dir_names_is_twelve() {
+        let dirs = managed_skill_dir_names();
+        assert_eq!(dirs.len(), 12);
+    }
+}

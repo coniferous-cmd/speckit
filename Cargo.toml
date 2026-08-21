@@ -1,0 +1,73 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/speckit-cli",
+    "crates/speckit-core",
+    "crates/speckit-commands",
+    "crates/speckit-telemetry",
+]
+
+[workspace.package]
+version = "1.9.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/Fission-AI/Speckit"
+authors = ["Speckit Contributors"]
+
+[workspace.dependencies]
+# CLI
+clap = { version = "4", features = ["derive", "env", "string"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_yaml = "0.9"
+serde_json = "1"
+
+# Validation
+validator = { version = "0.19", features = ["derive"] }
+
+# Error handling
+thiserror = "2"
+anyhow = "1"
+
+# Async runtime
+tokio = { version = "1", features = ["rt-multi-thread", "fs", "process", "time", "macros"] }
+
+# CLI UI
+indicatif = "0.17"
+inquire = "0.7"
+colored = "3"
+console = "0.15"
+
+# File system
+dunce = "1"
+globset = "0.4"
+tempfile = "3"
+walkdir = "2"
+
+# Crypto/UUID
+uuid = { version = "1", features = ["v4"] }
+sha2 = "0.10"
+
+# HTTP (telemetry)
+reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
+
+# Date/Time
+chrono = "0.4"
+
+# Directories
+dirs = "6"
+
+# Regex
+regex = "1"
+
+# Internal crates
+speckit-core = { path = "crates/speckit-core" }
+speckit-commands = { path = "crates/speckit-commands" }
+speckit-telemetry = { path = "crates/speckit-telemetry" }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true

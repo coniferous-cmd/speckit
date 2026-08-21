@@ -1,0 +1,22 @@
+[package]
+name = "speckit-commands"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Command implementations for Speckit CLI"
+
+[dependencies]
+clap = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+colored = { workspace = true }
+indicatif = { workspace = true }
+inquire = { workspace = true }
+chrono = { workspace = true }
+regex = { workspace = true }
+dirs = { workspace = true }
+speckit-core = { path = "../speckit-core" }

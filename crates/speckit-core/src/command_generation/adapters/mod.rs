@@ -1,0 +1,64 @@
+//! Command Adapters
+//!
+//! Re-exports all tool command adapters.
+
+pub mod amazon_q;
+pub mod antigravity;
+pub mod auggie;
+pub mod bob;
+pub mod claude;
+pub mod cline;
+pub mod codebuddy;
+pub mod command_code;
+pub mod continue_;
+pub mod costrict;
+pub mod crush;
+pub mod cursor;
+pub mod devin;
+pub mod factory;
+pub mod gemini;
+pub mod github_copilot;
+pub mod iflow;
+pub mod junie;
+pub mod kilocode;
+pub mod kiro;
+pub mod lingma;
+pub mod oh_my_pi;
+pub mod opencode;
+pub mod pi;
+pub mod qoder;
+pub mod qwen;
+pub mod roocode;
+pub mod trae;
+pub mod zcode;
+
+// Re-export adapter structs for convenience
+pub use amazon_q::AmazonQAdapter;
+pub use antigravity::AntigravityAdapter;
+pub use auggie::AuggieAdapter;
+pub use bob::BobAdapter;
+pub use claude::ClaudeAdapter;
+pub use cline::ClineAdapter;
+pub use codebuddy::CodebuddyAdapter;
+pub use command_code::CommandCodeAdapter;
+pub use continue_::ContinueAdapter;
+pub use costrict::CostrictAdapter;
+pub use crush::CrushAdapter;
+pub use cursor::CursorAdapter;
+pub use devin::DevinAdapter;
+pub use factory::FactoryAdapter;
+pub use gemini::GeminiAdapter;
+pub use github_copilot::GithubCopilotAdapter;
+pub use iflow::IflowAdapter;
+pub use junie::JunieAdapter;
+pub use kilocode::KilocodeAdapter;
+pub use kiro::KiroAdapter;
+pub use lingma::LingmaAdapter;
+pub use oh_my_pi::OhMyPiAdapter;
+pub use opencode::OpencodeAdapter;
+pub use pi::PiAdapter;
+pub use qoder::QoderAdapter;
+pub use qwen::QwenAdapter;
+pub use roocode::RoocodeAdapter;
+pub use trae::TraeAdapter;
+pub use zcode::ZcodeAdapter;
