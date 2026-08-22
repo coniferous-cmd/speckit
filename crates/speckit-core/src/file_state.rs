@@ -111,11 +111,11 @@ pub fn write_file_atomically(path: &Path, content: &str) -> Result<(), std::io::
         .join(&temp_name);
 
     let result = (|| -> Result<(), std::io::Error> {
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .mode(0o600)
-            .open(&temp_path)?;
+        let mut opts = OpenOptions::new();
+        opts.write(true).create_new(true);
+        #[cfg(unix)]
+        opts.mode(0o600);
+        let mut file = opts.open(&temp_path)?;
         file.write_all(content.as_bytes())?;
         file.sync_all()?;
         fs::rename(&temp_path, path)?;
@@ -164,12 +164,11 @@ pub fn acquire_file_lock(
     let ownership_token = format!("{}:{}", pid, Uuid::new_v4());
 
     loop {
-        match OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .mode(0o600)
-            .open(lock_path)
-        {
+        let mut opts = OpenOptions::new();
+        opts.write(true).create_new(true);
+        #[cfg(unix)]
+        opts.mode(0o600);
+        match opts.open(lock_path) {
             Ok(mut file) => {
                 file.write_all(ownership_token.as_bytes()).map_err(|e| {
                     let _ = file;
