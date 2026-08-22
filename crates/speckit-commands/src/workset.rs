@@ -48,10 +48,11 @@ pub struct WorksetRemoveOptions {
 
 /// Get the path to the worksets state file.
 fn get_worksets_state_path() -> PathBuf {
-    dirs::config_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join("speckit")
-        .join("worksets.json")
+    // Keep workset persistence on the same cross-platform config path as the
+    // rest of Speckit.  In particular, `dirs::config_dir()` ignores
+    // XDG_CONFIG_HOME on Windows, which can make tests and isolated CLI
+    // invocations read/write the user's real AppData directory.
+    speckit_core::global_config::get_global_config_dir().join("worksets.json")
 }
 
 /// Read the worksets state.
