@@ -12,6 +12,7 @@ pub enum SupportedShell {
     Bash,
     Zsh,
     Fish,
+    PowerShell,
 }
 
 impl SupportedShell {
@@ -20,6 +21,7 @@ impl SupportedShell {
             SupportedShell::Bash => "bash",
             SupportedShell::Zsh => "zsh",
             SupportedShell::Fish => "fish",
+            SupportedShell::PowerShell => "powershell",
         }
     }
 
@@ -28,6 +30,7 @@ impl SupportedShell {
             "bash" => Some(SupportedShell::Bash),
             "zsh" => Some(SupportedShell::Zsh),
             "fish" => Some(SupportedShell::Fish),
+            "powershell" | "pwsh" => Some(SupportedShell::PowerShell),
             _ => None,
         }
     }
@@ -37,6 +40,7 @@ impl SupportedShell {
             SupportedShell::Bash,
             SupportedShell::Zsh,
             SupportedShell::Fish,
+            SupportedShell::PowerShell,
         ]
     }
 }
@@ -50,6 +54,8 @@ fn detect_shell() -> Option<SupportedShell> {
         Some(SupportedShell::Zsh)
     } else if shell.contains("fish") {
         Some(SupportedShell::Fish)
+    } else if shell.contains("powershell") || shell.contains("pwsh") {
+        Some(SupportedShell::PowerShell)
     } else {
         None
     }
@@ -98,6 +104,7 @@ pub async fn completion_install(shell: Option<&str>, verbose: bool) -> anyhow::R
         SupportedShell::Bash => install_bash(verbose)?,
         SupportedShell::Zsh => install_zsh(verbose)?,
         SupportedShell::Fish => install_fish(verbose)?,
+        SupportedShell::PowerShell => install_powershell(verbose)?,
     }
 
     Ok(())
@@ -112,6 +119,7 @@ pub async fn completion_uninstall(shell: Option<&str>, yes: bool) -> anyhow::Res
             SupportedShell::Bash => "~/.bashrc",
             SupportedShell::Zsh => "~/.zshrc",
             SupportedShell::Fish => "~/.config/fish/config.fish",
+            SupportedShell::PowerShell => "$PROFILE",
         };
         let confirmed =
             inquire::Confirm::new(&format!("Remove Speckit configuration from {config_path}?"))
@@ -129,6 +137,7 @@ pub async fn completion_uninstall(shell: Option<&str>, yes: bool) -> anyhow::Res
         SupportedShell::Bash => uninstall_bash()?,
         SupportedShell::Zsh => uninstall_zsh()?,
         SupportedShell::Fish => uninstall_fish()?,
+        SupportedShell::PowerShell => uninstall_powershell()?,
     }
 
     Ok(())
@@ -217,6 +226,7 @@ complete -c speckit -n '__fish_use_subcommand' -a context -d 'Print the working 
 "#
             .to_string()
         }
+        SupportedShell::PowerShell => speckit_core::completions::generators::PowerShellGenerator::generate("speckit"),
     }
 }
 
@@ -372,6 +382,73 @@ fn uninstall_fish() -> anyhow::Result<()> {
 
     println!("\u{2713} Fish completion uninstalled");
     Ok(())
+}
+
+fn powershell_profile_path() -> anyhow::Result<std::path::PathBuf> {
+    if let Ok(profile) = std::env::var("PROFILE") {
+        return Ok(std::path::PathBuf::from(profile));
+    }
+    let home =
+        dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
+    let relative = if cfg!(windows) {
+        "Documents/WindowsPowerShell/Microsoft.PowerShell_profile.ps1"
+    } else {
+        ".config/powershell/Microsoft.PowerShell_profile.ps1"
+    };
+    Ok(home.join(relative))
+}
+
+fn install_powershell(verbose: bool) -> anyhow::Result<()> {
+    let profile = powershell_profile_path()?;
+    if let Some(parent) = profile.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let marker_start = "# >>> speckit completion >>>";
+    let marker_end = "# <<< speckit completion <<<";
+    let block = format!(
+        "{marker_start}\n{}\n{marker_end}\n",
+        generate_completion_script(SupportedShell::PowerShell)
+    );
+    let content = if profile.exists() {
+        std::fs::read_to_string(&profile)?
+    } else {
+        String::new()
+    };
+    let content = remove_marked_block(&content, marker_start, marker_end);
+    std::fs::write(&profile, format!("{content}{block}"))?;
+    println!("\u{2713} PowerShell completion installed");
+    if verbose {
+        println!("  Installed to: {}", profile.display());
+    }
+    println!("Reload with: . $PROFILE");
+    Ok(())
+}
+
+fn uninstall_powershell() -> anyhow::Result<()> {
+    let profile = powershell_profile_path()?;
+    if profile.exists() {
+        let content = std::fs::read_to_string(&profile)?;
+        let content = remove_marked_block(
+            &content,
+            "# >>> speckit completion >>>",
+            "# <<< speckit completion <<<",
+        );
+        std::fs::write(profile, content)?;
+    }
+    println!("\u{2713} PowerShell completion uninstalled");
+    Ok(())
+}
+
+fn remove_marked_block(content: &str, start: &str, end: &str) -> String {
+    if let (Some(begin), Some(finish)) = (content.find(start), content.find(end)) {
+        let finish = finish + end.len();
+        let mut result = String::with_capacity(content.len());
+        result.push_str(&content[..begin]);
+        result.push_str(&content[finish..]);
+        result
+    } else {
+        content.to_string()
+    }
 }
 
 fn atty_is_tty() -> bool {

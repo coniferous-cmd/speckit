@@ -21,3 +21,6 @@ tokio = { workspace = true }
 colored = { workspace = true }
 indicatif = { workspace = true }
 inquire = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
