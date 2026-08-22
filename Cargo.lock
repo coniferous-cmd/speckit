@@ -1696,6 +1696,8 @@ dependencies = [
  "serde_json",
  "speckit-commands",
  "speckit-core",
+ "speckit-telemetry",
+ "tempfile",
  "tokio",
 ]
 

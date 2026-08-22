@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    name: Format, lint, and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Run Clippy
+        # Keep existing warnings visible without making the initial CI red.
+        # The invalid-regex lint is currently present in the compatibility
+        # parser and is allowed until that parser is migrated.
+        run: cargo clippy --workspace --all-targets --all-features -- -A warnings -A clippy::invalid_regex
+
+      - name: Build workspace
+        run: cargo build --workspace --all-targets --all-features
+
+      - name: Run tests
+        run: cargo test --workspace --all-features
