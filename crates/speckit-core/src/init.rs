@@ -569,9 +569,6 @@ impl InitCommand {
         }
 
         println!();
-        println!("Learn more: https://github.com/Fission-AI/Speckit");
-        println!("Feedback:   https://github.com/Fission-AI/Speckit/issues");
-        println!();
     }
 }
 
