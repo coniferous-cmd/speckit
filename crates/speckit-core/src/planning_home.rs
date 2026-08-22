@@ -129,6 +129,9 @@ pub fn format_change_location(planning_home: &PlanningHome, change_name: &str) -
         .strip_prefix(&planning_home.root)
         .unwrap_or(&change_dir)
         .to_string_lossy()
+        // Locations are user-facing/logical paths, so keep their separator
+        // stable across platforms instead of leaking Windows `\\` separators.
+        .replace('\\', "/")
         .to_string()
 }
 
