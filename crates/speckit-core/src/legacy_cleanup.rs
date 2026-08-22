@@ -7,7 +7,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::config::{AI_TOOLS, OPENSPEC_MARKERS};
+use crate::config::OPENSPEC_MARKERS;
 
 /// Legacy config file names from the old ToolRegistry.
 pub const LEGACY_CONFIG_FILES: &[&str] = &[
@@ -82,11 +82,10 @@ pub struct CleanupResult {
 
 /// Resolve the Codex global prompts directory.
 pub fn get_codex_prompt_dir() -> PathBuf {
-    if let Ok(env_home) = std::env::var("CODEX_HOME") {
-        if !env_home.trim().is_empty() {
+    if let Ok(env_home) = std::env::var("CODEX_HOME")
+        && !env_home.trim().is_empty() {
             return PathBuf::from(env_home.trim()).join("prompts");
         }
-    }
     dirs::home_dir()
         .unwrap_or_else(|| PathBuf::from("."))
         .join(".codex")
@@ -152,14 +151,12 @@ pub fn detect_legacy_artifacts(project_path: &Path) -> Result<LegacyDetectionRes
     // Detect legacy config files
     for file_name in LEGACY_CONFIG_FILES {
         let file_path = project_path.join(file_name);
-        if file_path.exists() {
-            if let Ok(content) = fs::read_to_string(&file_path) {
-                if has_speckit_markers(&content) {
+        if file_path.exists()
+            && let Ok(content) = fs::read_to_string(&file_path)
+                && has_speckit_markers(&content) {
                     result.config_files.push(file_name.to_string());
                     result.config_files_to_update.push(file_name.to_string());
                 }
-            }
-        }
     }
 
     // Detect legacy slash command directories
@@ -225,8 +222,8 @@ pub fn detect_legacy_artifacts(project_path: &Path) -> Result<LegacyDetectionRes
         "opsx-onboard.md",
     ];
 
-    if codex_prompts_dir.is_dir() {
-        if let Ok(entries) = fs::read_dir(&codex_prompts_dir) {
+    if codex_prompts_dir.is_dir()
+        && let Ok(entries) = fs::read_dir(&codex_prompts_dir) {
             for entry in entries.flatten() {
                 let name = entry.file_name().to_string_lossy().to_string();
                 if managed_codex_files.contains(&name.as_str()) {
@@ -244,18 +241,16 @@ pub fn detect_legacy_artifacts(project_path: &Path) -> Result<LegacyDetectionRes
                 }
             }
         }
-    }
 
     // Detect legacy structure files
     result.has_speckit_agents = project_path.join("speckit/AGENTS.md").exists();
     result.has_project_md = project_path.join("speckit/project.md").exists();
 
     let root_agents = project_path.join("AGENTS.md");
-    if root_agents.exists() {
-        if let Ok(content) = fs::read_to_string(&root_agents) {
+    if root_agents.exists()
+        && let Ok(content) = fs::read_to_string(&root_agents) {
             result.has_root_agents_with_markers = has_speckit_markers(&content);
         }
-    }
 
     result.has_legacy_artifacts = !result.config_files.is_empty()
         || !result.slash_command_dirs.is_empty()
@@ -561,7 +556,7 @@ pub fn omit_tool_legacy_artifacts(
     next.slash_command_dirs.retain(|dir| {
         !dir_to_tool
             .get(dir.as_str())
-            .map_or(false, |t| skip.contains(t))
+            .is_some_and(|t| skip.contains(t))
     });
     recalculate_has_legacy(&mut next);
     next

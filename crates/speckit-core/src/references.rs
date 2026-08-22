@@ -67,8 +67,8 @@ pub fn is_shell_safe_remote(remote: &str) -> bool {
 
 /// Build a registration fix hint for an unresolved store.
 pub fn register_fix(id: &str, remote: Option<&str>) -> String {
-    if let Some(r) = remote {
-        if is_shell_safe_remote(r) {
+    if let Some(r) = remote
+        && is_shell_safe_remote(r) {
             let checkout = dirs::home_dir()
                 .unwrap_or_else(|| std::path::PathBuf::from("."))
                 .join("speckit")
@@ -79,7 +79,6 @@ pub fn register_fix(id: &str, remote: Option<&str>) -> String {
                 r, quoted, quoted, id
             );
         }
-    }
     format!(
         "Get a checkout from a teammate and run: speckit store register <path> --id {}",
         id
@@ -354,11 +353,10 @@ fn truncate_entries_to_budget(entries: &mut Vec<ReferenceIndexEntry>) {
     // First pass: find which entries need truncation and how much
     let mut truncations = Vec::new();
     for (idx, entry) in entries.iter().enumerate() {
-        if let Some(ref specs) = entry.specs {
-            if specs.len() > 10 {
+        if let Some(ref specs) = entry.specs
+            && specs.len() > 10 {
                 truncations.push((idx, specs.len()));
             }
-        }
     }
 
     // Second pass: apply truncations
@@ -377,7 +375,7 @@ fn truncate_entries_to_budget(entries: &mut Vec<ReferenceIndexEntry>) {
         // Note: We estimate size locally instead of calling rendered_byte_size
         // to avoid borrow conflicts
         while low < high {
-            let mid = (low + high + 1) / 2;
+            let mid = (low + high).div_ceil(2);
             entry.specs = Some(original_specs[..mid].to_vec());
             // Simple heuristic: check if this entry alone exceeds budget
             let entry_size = serde_json::to_string(&entry).map(|s| s.len()).unwrap_or(0);

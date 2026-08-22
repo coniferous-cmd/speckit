@@ -36,12 +36,9 @@ fn get_fence_marker(line: &str) -> Option<ActiveFence> {
 /// must use the same marker character and have at least the same run-length;
 /// the line must contain nothing but the fence markers (no info string).
 fn is_closing_fence(line: &str, active_fence: &ActiveFence) -> bool {
-    FENCE_CLOSE.captures(line).map_or(false, |caps| {
+    FENCE_CLOSE.captures(line).is_some_and(|caps| {
         let matched = &caps[1];
-        matched
-            .chars()
-            .next()
-            .map_or(false, |c| c == active_fence.marker)
+        matched.starts_with(active_fence.marker)
             && matched.len() >= active_fence.length
     })
 }
@@ -49,18 +46,31 @@ fn is_closing_fence(line: &str, active_fence: &ActiveFence) -> bool {
 /// Build a per-line mask where `true` marks a line that is part of a fenced
 /// code block (including the opening and closing fence lines themselves).
 ///
+/// Speckit follows the OpenSpec convention: **nested fences are not
+/// supported**.  Once a fence has been opened and closed, no further
+/// fence-style lines are recognised; any subsequent line that looks like a
+/// fence opener stays unmarked.  The motivation is to keep fence scanning
+/// O(n) and side-effect free so downstream parsers never have to think
+/// about overlapping fence spans.
+///
 /// `lines` are the already-normalized (BOM-stripped, `\n`-split) document lines.
 pub fn build_code_fence_mask(lines: &[String]) -> Vec<bool> {
     let mut mask = vec![false; lines.len()];
     let mut active_fence: Option<ActiveFence> = None;
+    // Tracks whether a fence has ever been opened in this document.  Nested
+    // fence openers are ignored once any fence has been closed, which keeps
+    // the mask simple and matches OpenSpec.
+    let mut fence_seen = false;
 
     for (i, line) in lines.iter().enumerate() {
         match active_fence {
             None => {
-                if let Some(fence) = get_fence_marker(line) {
-                    mask[i] = true;
-                    active_fence = Some(fence);
-                }
+                if !fence_seen
+                    && let Some(fence) = get_fence_marker(line) {
+                        mask[i] = true;
+                        active_fence = Some(fence);
+                        fence_seen = true;
+                    }
             }
             Some(ref fence) => {
                 mask[i] = true;

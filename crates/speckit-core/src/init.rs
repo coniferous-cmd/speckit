@@ -11,6 +11,8 @@ use std::path::{Path, PathBuf};
 use crate::config::{self, SPECKIT_DIR_NAME};
 use crate::legacy_cleanup::{self, LegacyDetectionResult};
 use crate::planning_home;
+use crate::global_config::Profile;
+use crate::profiles;
 
 /// Options for the init command.
 #[derive(Debug, Clone, Default)]
@@ -111,8 +113,23 @@ impl InitCommand {
         let selected_tools = self.resolve_tools_arg().unwrap_or_default();
         let validated_tools = self.validate_tools(&selected_tools, &project_path)?;
 
+        let (_profile, workflow_filter) = self.resolve_workflow_filter(&project_path)?;
+        let workflows = workflow_filter.clone().unwrap_or_else(profiles::all_workflow_strings);
+
+        // The welcome screen is intentionally limited to interactive init. In
+        // particular, `--tools` and CI/non-TTY invocations must never wait for
+        // input. `animation` still controls the interactive rendering branch.
+        if self.can_prompt_interactively() {
+            crate::ui::welcome_screen::show_welcome_screen(&workflows, Some(self.animation))
+                .context("Failed to render welcome screen")?;
+        }
+
         // Generate skills and commands
-        let results = self.generate_skills_and_commands(&project_path, &validated_tools)?;
+        let results = self.generate_skills_and_commands(
+            &project_path,
+            &validated_tools,
+            workflow_filter.as_deref(),
+        )?;
 
         // Finalize deferred legacy cleanup
         if let Some(ref deferred) = deferred_legacy_cleanup {
@@ -121,6 +138,21 @@ impl InitCommand {
 
         // Create config.yaml if needed
         let config_status = self.create_config(&speckit_path, extend_mode)?;
+
+        if validated_tools.iter().any(|tool| tool.value == "github-copilot") {
+            let opt_in = self.copilot_cloud_option
+                .or_else(|| crate::github_copilot::read_copilot_cloud_opt_in(&project_path))
+                .or_else(|| {
+                    crate::github_copilot::has_existing_managed_cloud_files(&project_path)
+                        .then_some(true)
+                });
+            if let Some(value) = opt_in {
+                crate::github_copilot::write_copilot_cloud_files(&project_path, Some(value))?;
+                crate::github_copilot::persist_copilot_cloud_opt_in(&project_path, value)?;
+            }
+        } else if self.copilot_cloud_option.is_some() {
+            println!("GitHub Copilot cloud setup ignored: github-copilot is not selected.");
+        }
 
         // Display success
         self.display_success_message(&project_path, &validated_tools, &results, &config_status);
@@ -362,6 +394,7 @@ impl InitCommand {
         &self,
         _project_path: &Path,
         tools: &[ValidatedInitTool],
+        workflow_filter: Option<&[String]>,
     ) -> Result<GenerationResults> {
         let mut results = GenerationResults::default();
 
@@ -383,9 +416,8 @@ impl InitCommand {
             // `update` both consume `templates::generation::get_skill_templates`
             // so they can never drift on which skills exist or what their
             // frontmatter looks like.
-            let workflow_filter: Option<Vec<String>> = None;
             let skill_entries =
-                crate::templates::generation::get_skill_templates(workflow_filter.as_deref());
+                crate::templates::generation::get_skill_templates(workflow_filter);
             let generated_by_version =
                 crate::templates::generation::speckit_generated_by_version();
             for entry in &skill_entries {
@@ -413,6 +445,57 @@ impl InitCommand {
         }
 
         Ok(results)
+    }
+
+    /// Resolve the profile once for all init outputs. CLI values are validated
+    /// here so an unknown profile cannot silently fall back to all workflows.
+    fn resolve_workflow_filter(
+        &self,
+        project_path: &Path,
+    ) -> Result<(Profile, Option<Vec<String>>)> {
+        let override_profile = match self.profile_override.as_deref() {
+            None => None,
+            Some("core") => Some(Profile::Core),
+            Some("custom") | Some("expanded") => Some(Profile::Custom),
+            Some(other) => return Err(anyhow::anyhow!(
+                "Unknown profile '{other}'. Supported profiles: core, expanded, custom."
+            )),
+        };
+
+        let (profile, filter) = profiles::resolve_profile_and_workflow_filter(
+            override_profile.as_ref(),
+            Some(project_path),
+        );
+        if self.profile_override.as_deref() == Some("expanded") {
+            return Ok((profile, None));
+        }
+
+        // A custom profile may declare workflows in the project config. The
+        // shared resolver already handles global workflows; project values
+        // take precedence for init as OpenSpec does.
+        if override_profile == Some(Profile::Custom)
+            && let Ok(value) = std::fs::read_to_string(project_path.join("speckit/config.yaml"))
+            && let Ok(yaml) = serde_yaml::from_str::<serde_yaml::Value>(&value)
+            && let Some(workflows) = yaml.get("workflows").and_then(|v| v.as_sequence())
+        {
+            let selected = workflows
+                .iter()
+                .filter_map(|v| v.as_str().map(ToOwned::to_owned))
+                .collect::<Vec<_>>();
+            let unknown = selected
+                .iter()
+                .filter(|wf| !profiles::ALL_WORKFLOWS.contains(&wf.as_str()))
+                .cloned()
+                .collect::<Vec<_>>();
+            if !unknown.is_empty() {
+                return Err(anyhow::anyhow!(
+                    "Unknown workflow(s) in custom profile: {}",
+                    unknown.join(", ")
+                ));
+            }
+            return Ok((Profile::Custom, Some(selected)));
+        }
+        Ok((profile, filter))
     }
 
     /// Create the config.yaml file if it does not exist.

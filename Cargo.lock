@@ -1695,6 +1695,7 @@ dependencies = [
  "serde",
  "serde_json",
  "speckit-commands",
+ "speckit-core",
  "tokio",
 ]
 

@@ -25,7 +25,7 @@ struct TaskLocation {
 
 /// Matches any level-2 heading (`## ...`), up to 3 leading spaces.
 static LEVEL_TWO_HEADING: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^ {0,3}##(?!#)(?:[ \t]+|[ \t]*\r?$)").unwrap());
+    LazyLock::new(|| Regex::new(r"^ {0,3}##[^#](?:[ \t]+|[ \t]*\r?$)").unwrap());
 
 /// Matches a numbered group heading: `## N.` where N is one or more digits.
 static NUMBERED_GROUP_HEADING: LazyLock<Regex> =
@@ -33,7 +33,7 @@ static NUMBERED_GROUP_HEADING: LazyLock<Regex> =
 
 /// Matches a task ID at the start of a description: `1.2.3A` etc.
 static TASK_ID: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^(\d+(?:\.\d+)+(?:[A-Za-z]+)?)(?=\s|$)").unwrap());
+    LazyLock::new(|| Regex::new(r"^(\d+(?:\.\d+)+(?:[A-Za-z]+)?)(?:(?=\s)|$)").unwrap());
 
 /// Matches a Markdown task (checkbox) line: `- [ ] ...` or `* [x] ...`.
 static TASK_LINE_PATTERN: LazyLock<Regex> =

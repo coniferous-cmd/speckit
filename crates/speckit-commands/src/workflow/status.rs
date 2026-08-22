@@ -50,7 +50,7 @@ pub struct ChangeStatusOutput {
 
 /// Execute the status command.
 pub async fn status_command(options: StatusOptions) -> anyhow::Result<()> {
-    let project_root = std::env::current_dir()?.to_string_lossy().to_string();
+    let project_root = super::resolve_project_root(options.store.as_deref()).await?;
 
     // Handle no-changes case gracefully
     if options.change.is_none() {

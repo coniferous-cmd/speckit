@@ -27,17 +27,15 @@ impl InteractiveOptions {
 /// 3. Presence of `CI` environment variable.
 /// 4. Whether stdin is a TTY.
 pub fn is_interactive(options: Option<&InteractiveOptions>) -> bool {
-    if let Some(opts) = options {
-        if opts.resolve_no_interactive() {
+    if let Some(opts) = options
+        && opts.resolve_no_interactive() {
             return false;
         }
-    }
 
-    if let Ok(val) = std::env::var("OPEN_SPEC_INTERACTIVE") {
-        if val == "0" {
+    if let Ok(val) = std::env::var("OPEN_SPEC_INTERACTIVE")
+        && val == "0" {
             return false;
         }
-    }
 
     // Respect standard CI environment variable.
     if std::env::var("CI").is_ok() {

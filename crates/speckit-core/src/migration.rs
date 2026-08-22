@@ -6,7 +6,7 @@
 use anyhow::Result;
 use std::collections::HashSet;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::config::AI_TOOLS;
 
@@ -254,11 +254,10 @@ fn collect_legacy_tool_migrations(
             if apply && tool_ids.is_none() && legacy.needs_consent {
                 continue;
             }
-            if let Some(ids) = tool_ids {
-                if !ids.contains(&tool.value.as_str()) {
+            if let Some(ids) = tool_ids
+                && !ids.contains(&tool.value.as_str()) {
                     continue;
                 }
-            }
 
             let legacy_root_path = project_path.join(&legacy.root);
             if !legacy_root_path.exists() {
@@ -269,8 +268,8 @@ fn collect_legacy_tool_migrations(
             let legacy_skills_dir = legacy_root_path.join("skills");
 
             let mut skill_dirs_moved = 0;
-            let mut command_files_moved = 0;
-            let mut kept = 0;
+            let command_files_moved = 0;
+            let kept = 0;
 
             // Check for skill directories
             if legacy_skills_dir.is_dir() && current_skills_dir.is_dir() {

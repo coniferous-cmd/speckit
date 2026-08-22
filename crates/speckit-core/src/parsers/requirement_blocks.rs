@@ -253,7 +253,7 @@ pub fn extract_requirements_section(content: &str) -> RequirementsSectionParts {
     } else {
         format!("\n{}", after_raw)
     };
-    let preamble = preamble_lines.join("\n").trim_end().to_string();
+    let preamble = preamble_lines.join("\n").trim().to_string();
     let before_out = if before.trim_end().is_empty() {
         before
     } else {
@@ -529,15 +529,14 @@ fn record_if_skipped_header(
     if fence_mask[index] {
         return;
     }
-    if let Some(caps) = H3_HEADER.captures(&lines[index]) {
-        if !REQUIREMENT_HEADER_REGEX.is_match(&lines[index]) {
+    if let Some(caps) = H3_HEADER.captures(&lines[index])
+        && !REQUIREMENT_HEADER_REGEX.is_match(&lines[index]) {
             skipped_headers.push(SkippedHeader {
                 header: caps[1].trim().to_string(),
                 section: section_name.to_string(),
                 line: body_start_line + index,
             });
         }
-    }
 }
 
 /// Parse requirement names from a REMOVED section.  Supports both canonical

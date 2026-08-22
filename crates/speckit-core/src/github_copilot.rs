@@ -4,9 +4,8 @@
 //! when the github-copilot tool is selected during init/update.
 
 use anyhow::Result;
-use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 /// The Copilot tool id.
 const COPILOT_TOOL_ID: &str = "github-copilot";
@@ -141,7 +140,27 @@ fn reconcile_copilot_cloud_file(full_path: &Path, rel_path: &str) -> Result<bool
 }
 
 /// Reconcile Copilot cloud agent files in the project directory.
-pub fn write_copilot_cloud_files(project_path: &Path) -> Result<CopilotCloudResult> {
+///
+/// `opt_in` carries the user's explicit choice:
+///
+/// * `Some(true)`  -- enable Copilot cloud setup by writing the managed
+///   files (or refreshing any existing managed copies).
+/// * `Some(false)` -- remove managed Copilot cloud files; user-modified
+///   files are never touched.
+/// * `None`        -- preserve current behaviour: write when no opt-in
+///   record exists yet, otherwise keep whatever is on disk.
+pub fn write_copilot_cloud_files(
+    project_path: &Path,
+    opt_in: Option<bool>,
+) -> Result<CopilotCloudResult> {
+    if opt_in == Some(false) {
+        let _ = remove_copilot_cloud_files(project_path)?;
+        return Ok(CopilotCloudResult {
+            setup_steps_written: false,
+            agent_written: false,
+        });
+    }
+
     let setup_steps_path = project_path.join(COPILOT_CLOUD_FILES.setup_steps);
     let agent_path = project_path.join(COPILOT_CLOUD_FILES.agent);
     let alternate_agent_path = project_path.join(".github/agents/speckit.md");
@@ -233,8 +252,8 @@ pub fn has_existing_managed_cloud_files(project_path: &Path) -> bool {
     ];
 
     for full_path in &paths {
-        if full_path.exists() {
-            if let Ok(content) = fs::read_to_string(full_path) {
+        if full_path.exists()
+            && let Ok(content) = fs::read_to_string(full_path) {
                 let rel_path = full_path
                     .strip_prefix(project_path)
                     .unwrap_or(full_path)
@@ -244,7 +263,6 @@ pub fn has_existing_managed_cloud_files(project_path: &Path) -> bool {
                     return true;
                 }
             }
-        }
     }
     false
 }
@@ -296,13 +314,11 @@ pub fn find_unmanaged_cloud_files(project_path: &Path) -> Vec<String> {
 
     for rel_path in &paths {
         let full_path = project_path.join(rel_path);
-        if full_path.exists() {
-            if let Ok(content) = fs::read_to_string(&full_path) {
-                if !is_managed_copilot_cloud_file(rel_path, &content) {
+        if full_path.exists()
+            && let Ok(content) = fs::read_to_string(&full_path)
+                && !is_managed_copilot_cloud_file(rel_path, &content) {
                     collisions.push(rel_path.to_string());
                 }
-            }
-        }
     }
     collisions
 }
@@ -314,13 +330,11 @@ pub fn list_managed_cloud_files(project_path: &Path) -> Vec<String> {
 
     for rel_path in &paths {
         let full_path = project_path.join(rel_path);
-        if full_path.exists() {
-            if let Ok(content) = fs::read_to_string(&full_path) {
-                if is_managed_copilot_cloud_file(rel_path, &content) {
+        if full_path.exists()
+            && let Ok(content) = fs::read_to_string(&full_path)
+                && is_managed_copilot_cloud_file(rel_path, &content) {
                     present.push(rel_path.to_string());
                 }
-            }
-        }
     }
     present
 }

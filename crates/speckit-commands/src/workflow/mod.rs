@@ -20,3 +20,6 @@ pub use schemas::{SchemasOptions, schemas_command};
 pub use shared::DEFAULT_SCHEMA;
 pub use status::{StatusOptions, status_command};
 pub use templates::{TemplatesOptions, templates_command};
+
+// Re-export resolve_project_root so workflow commands can use it.
+pub use crate::change::resolve_project_root;

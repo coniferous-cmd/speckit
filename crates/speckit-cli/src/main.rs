@@ -1,6 +1,8 @@
 use clap::{Args, Parser, Subcommand};
 use std::process;
 
+use speckit_core::root_selection::{ResolveSpeckitRootOptions, resolve_speckit_root, emit_store_root_banner};
+
 use speckit_commands::{
     archive, change, completion, config, context, doctor, feedback, init, schema, shared_output,
     show, spec, store, update, validate, view, workflow, workset,
@@ -800,7 +802,25 @@ async fn main() {
         Commands::View { store } => {
             let target_path =
                 std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-            view::execute(&target_path)
+            let resolved = match resolve_speckit_root(&ResolveSpeckitRootOptions {
+                store: store.clone(),
+                store_path: None,
+                start_path: Some(target_path.clone()),
+                allow_implicit_root: Some(true),
+                global_data_dir: None,
+            }) {
+                Ok(r) => r,
+                Err(err) => {
+                    let diag = &err.diagnostic;
+                    eprintln!("Error: {}", diag.message);
+                    if let Some(fix) = diag.fix.as_deref() {
+                        eprintln!("Fix: {fix}");
+                    }
+                    process::exit(1);
+                }
+            };
+            emit_store_root_banner(&resolved);
+            view::execute(&resolved.path, store.as_deref())
         }
 
         Commands::Change { command } => {

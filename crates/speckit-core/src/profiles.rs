@@ -1,4 +1,5 @@
 use crate::global_config::Profile;
+use serde_yaml;
 
 /// Core workflows included in the `core` profile.
 ///
@@ -57,6 +58,90 @@ pub fn core_workflow_strings() -> Vec<String> {
 /// Convenience: returns all workflows as owned `String`s.
 pub fn all_workflow_strings() -> Vec<String> {
     ALL_WORKFLOWS.iter().map(|s| s.to_string()).collect()
+}
+
+/// Resolve the active profile and workflow filter for skill generation.
+///
+/// This is the canonical resolution logic shared by `init` and `update`. It is
+/// used to ensure both commands produce the same skill set for the same profile
+/// configuration.
+///
+/// The precedence is:
+///   1. The `profile_override` argument (CLI-level override).
+///   2. Project-level config (`speckit/config.yaml` or `speckit/config.yml`).
+///   3. Global config (`~/.config/speckit/config.json`).
+///   4. Default `core` profile.
+///
+/// Returns `(active_profile, workflow_filter)` where `workflow_filter` is `None`
+/// when the active profile covers all known workflows (equivalent to no filter).
+pub fn resolve_profile_and_workflow_filter(
+    profile_override: Option<&crate::global_config::Profile>,
+    project_path: Option<&std::path::Path>,
+) -> (Profile, Option<Vec<String>>) {
+    // 1. CLI override
+    if let Some(p) = profile_override {
+        return resolve_filter_for_profile(p);
+    }
+
+    // 2. Project config
+    if let Some(path) = project_path {
+        let speckit_path = path.join("speckit");
+        for fname in ["config.yaml", "config.yml"] {
+            let cfg_path = speckit_path.join(fname);
+            if let Ok(profile) = parse_profile_from_file(&cfg_path) {
+                return resolve_filter_for_profile(&profile);
+            }
+        }
+    }
+
+    // 3. Global config
+    let cfg = crate::global_config::get_global_config();
+    resolve_filter_for_profile(&cfg.profile)
+}
+
+fn resolve_filter_for_profile(profile: &Profile) -> (Profile, Option<Vec<String>>) {
+    match profile {
+        Profile::Core => {
+            let active = core_workflow_strings();
+            if active.len() == ALL_WORKFLOWS.len() {
+                (Profile::Core, None)
+            } else {
+                (Profile::Core, Some(active))
+            }
+        }
+        Profile::Custom => {
+            let workflows = crate::global_config::get_global_config()
+                .workflows
+                .clone()
+                .unwrap_or_default();
+            if workflows.is_empty() {
+                (Profile::Custom, Some(vec![]))
+            } else if workflows.len() == ALL_WORKFLOWS.len()
+                && workflows.iter().all(|w| ALL_WORKFLOWS.contains(&w.as_str()))
+            {
+                (Profile::Custom, None)
+            } else {
+                (Profile::Custom, Some(workflows))
+            }
+        }
+    }
+}
+
+/// Parse a profile from a speckit config file.
+fn parse_profile_from_file(path: &std::path::Path) -> anyhow::Result<Profile> {
+    let content = std::fs::read_to_string(path)?;
+    let parsed: serde_yaml::Value = serde_yaml::from_str(&content)?;
+    if let Some(value) = parsed.get("profile").and_then(|v| v.as_str()) {
+        match value.trim().to_lowercase().as_str() {
+            "core" => Ok(Profile::Core),
+            "custom" => Ok(Profile::Custom),
+            other => Err(anyhow::anyhow!(
+                "Unknown profile '{other}'. Supported: core, custom."
+            )),
+        }
+    } else {
+        Err(anyhow::anyhow!("no profile field"))
+    }
 }
 
 #[cfg(test)]

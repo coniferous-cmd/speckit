@@ -4,7 +4,6 @@
 //! profile and delivery configuration.
 
 use std::collections::HashSet;
-use std::fs;
 use std::path::Path;
 
 use crate::config::AI_TOOLS;

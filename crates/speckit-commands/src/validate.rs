@@ -70,7 +70,7 @@ pub async fn validate_command(
     item_name: Option<&str>,
     options: ValidateOptions,
 ) -> anyhow::Result<()> {
-    let project_root = std::env::current_dir()?.to_string_lossy().to_string();
+    let project_root = crate::change::resolve_project_root(options.store.as_deref()).await?;
 
     let bulk = options.all || options.changes || options.specs;
 

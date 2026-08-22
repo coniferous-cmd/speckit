@@ -11,31 +11,25 @@ const GLOBAL_DATA_DIR_NAME: &str = "speckit";
 /// Profile controls *which* workflows are installed.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum Profile {
+    #[default]
     Core,
     Custom,
 }
 
-impl Default for Profile {
-    fn default() -> Self {
-        Profile::Core
-    }
-}
 
 /// Delivery controls *how* workflows are delivered (skills, commands, or both).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum Delivery {
+    #[default]
     Both,
     Skills,
     Commands,
 }
 
-impl Default for Delivery {
-    fn default() -> Self {
-        Delivery::Both
-    }
-}
 
 /// Telemetry section of global config (identity + opt-out).
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -97,11 +91,10 @@ impl Default for GlobalConfig {
 /// - Windows fallback: `%APPDATA%/speckit/`.
 pub fn get_global_config_dir() -> PathBuf {
     // XDG_CONFIG_HOME takes precedence on all platforms when explicitly set.
-    if let Ok(xdg) = std::env::var("XDG_CONFIG_HOME") {
-        if !xdg.is_empty() {
+    if let Ok(xdg) = std::env::var("XDG_CONFIG_HOME")
+        && !xdg.is_empty() {
             return PathBuf::from(xdg).join(GLOBAL_CONFIG_DIR_NAME);
         }
-    }
 
     if cfg!(target_os = "windows") {
         if let Ok(app_data) = std::env::var("APPDATA") {
@@ -128,11 +121,10 @@ pub fn get_global_config_dir() -> PathBuf {
 /// - Unix/macOS fallback: `~/.local/share/speckit/`.
 /// - Windows fallback: `%LOCALAPPDATA%/speckit/`.
 pub fn get_global_data_dir() -> PathBuf {
-    if let Ok(xdg) = std::env::var("XDG_DATA_HOME") {
-        if !xdg.is_empty() {
+    if let Ok(xdg) = std::env::var("XDG_DATA_HOME")
+        && !xdg.is_empty() {
             return PathBuf::from(xdg).join(GLOBAL_DATA_DIR_NAME);
         }
-    }
 
     if cfg!(target_os = "windows") {
         if let Ok(local) = std::env::var("LOCALAPPDATA") {

@@ -79,7 +79,7 @@ pub async fn instructions_command(
     artifact_id: Option<&str>,
     options: InstructionsOptions,
 ) -> anyhow::Result<()> {
-    let project_root = std::env::current_dir()?.to_string_lossy().to_string();
+    let project_root = super::resolve_project_root(options.store.as_deref()).await?;
 
     let change_name = validate_change_exists(
         options.change.as_deref(),
@@ -404,7 +404,7 @@ fn print_instructions_text(instructions: &ArtifactInstructions) {
 
 /// Execute the apply instructions command.
 pub async fn apply_instructions_command(options: ApplyInstructionsOptions) -> anyhow::Result<()> {
-    let project_root = std::env::current_dir()?.to_string_lossy().to_string();
+    let project_root = super::resolve_project_root(options.store.as_deref()).await?;
 
     let change_name = validate_change_exists(
         options.change.as_deref(),
@@ -648,7 +648,7 @@ fn print_apply_instructions_text(instructions: &ApplyInstructions) {
 pub async fn archive_instructions_command(
     options: ArchiveInstructionsOptions,
 ) -> anyhow::Result<()> {
-    let project_root = std::env::current_dir()?.to_string_lossy().to_string();
+    let project_root = super::resolve_project_root(options.store.as_deref()).await?;
 
     let change_name = validate_change_exists(
         options.change.as_deref(),

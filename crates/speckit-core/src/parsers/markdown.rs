@@ -20,8 +20,10 @@ use super::requirement_text::extract_requirement_text;
 static HEADER_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(#{1,6})\s+(.+)$").unwrap());
 
 /// Matches just the `#` prefix and trailing whitespace of a header (used to
-/// detect section boundaries without capturing the title).
-static HEADER_LEVEL_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^#{1,6}\s+").unwrap());
+/// detect section boundaries without capturing the title).  Capture group 1
+/// is the leading `#` run so the caller can read the level without scanning
+/// the whole match.
+static HEADER_LEVEL_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(#{1,6})\s+").unwrap());
 
 /// A parsed Markdown section (heading + body + nested children).
 #[derive(Debug, Clone, PartialEq)]
@@ -95,7 +97,7 @@ impl MarkdownParser {
 
         for (level, title, content) in flat {
             // Pop and nest any sections at the same or deeper level.
-            while stack.last().map_or(false, |s| s.level >= level) {
+            while stack.last().is_some_and(|s| s.level >= level) {
                 let finished = stack.pop().unwrap();
                 if let Some(parent) = stack.last_mut() {
                     parent.children.push(finished);
@@ -136,7 +138,7 @@ impl MarkdownParser {
             } else {
                 HEADER_LEVEL_REGEX
                     .captures(&self.lines[i])
-                    .map_or(false, |caps| caps[1].len() <= current_level)
+                    .is_some_and(|caps| caps[1].len() <= current_level)
             };
 
             if is_header {
@@ -357,11 +359,12 @@ mod tests {
 
     #[test]
     fn parse_sections_flat() {
-        let parser = MarkdownParser::new("# Title\nBody\n## Second\nMore");
+        // Two siblings at the same heading level remain top-level sections.
+        let parser = MarkdownParser::new("## Title\nBody\n## Second\nMore");
         let sections = parser.parse_sections();
         assert_eq!(sections.len(), 2);
         assert_eq!(sections[0].title, "Title");
-        assert_eq!(sections[0].level, 1);
+        assert_eq!(sections[0].level, 2);
         assert_eq!(sections[1].title, "Second");
         assert_eq!(sections[1].level, 2);
     }

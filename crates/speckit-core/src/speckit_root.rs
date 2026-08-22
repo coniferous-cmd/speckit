@@ -60,22 +60,16 @@ pub struct CreatedPathLedgerEntry {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct InspectionPresence {
     pub present: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
 }
 
-impl Default for InspectionPresence {
-    fn default() -> Self {
-        Self {
-            present: None,
-            path: None,
-        }
-    }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct SpeckitRootInspection {
     pub present: Option<bool>,
     pub config: InspectionPresence,
@@ -86,19 +80,6 @@ pub struct SpeckitRootInspection {
     pub diagnostics: Vec<StoreDiagnostic>,
 }
 
-impl Default for SpeckitRootInspection {
-    fn default() -> Self {
-        Self {
-            present: None,
-            config: InspectionPresence::default(),
-            specs: InspectionPresence::default(),
-            changes: InspectionPresence::default(),
-            archive: InspectionPresence::default(),
-            healthy: false,
-            diagnostics: Vec::new(),
-        }
-    }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EnsureSpeckitRootResult {

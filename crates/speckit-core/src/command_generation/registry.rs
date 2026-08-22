@@ -15,6 +15,12 @@ pub struct CommandAdapterRegistry {
 
 static GLOBAL_REGISTRY: OnceLock<CommandAdapterRegistry> = OnceLock::new();
 
+impl Default for CommandAdapterRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CommandAdapterRegistry {
     /// Creates a new empty registry.
     pub fn new() -> Self {

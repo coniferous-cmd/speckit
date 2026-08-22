@@ -8,6 +8,7 @@ use colored::Colorize;
 use std::fs;
 use std::path::Path;
 
+use crate::root_selection::{ResolveSpeckitRootOptions, resolve_speckit_root};
 use crate::utils::task_progress::get_task_progress_for_change;
 
 /// The name of the Speckit directory within a project.
@@ -45,6 +46,12 @@ struct ChangesData {
 /// The view command implementation.
 pub struct ViewCommand;
 
+impl Default for ViewCommand {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ViewCommand {
     /// Create a new view command.
     pub fn new() -> Self {
@@ -52,15 +59,44 @@ impl ViewCommand {
     }
 
     /// Execute the view command, displaying a dashboard for the project at `target_path`.
-    pub fn execute(&self, target_path: &Path) -> Result<()> {
-        let speckit_dir = target_path.join(SPECKIT_DIR_NAME);
+    ///
+    /// When `store_id` is `Some`, the dashboard is built from the matching
+    /// registered store instead of the local working directory; the store id
+    /// is shown in the header so the operator can confirm which project they
+    /// are looking at.
+    pub fn execute(&self, target_path: &Path, store_id: Option<&str>) -> Result<()> {
+        let resolved = resolve_speckit_root(&ResolveSpeckitRootOptions {
+            store: store_id.map(|s| s.to_string()),
+            store_path: None,
+            start_path: Some(target_path.to_path_buf()),
+            allow_implicit_root: Some(true),
+            global_data_dir: None,
+        })?;
+
+        let speckit_dir = resolved.path.join(SPECKIT_DIR_NAME);
 
         if !speckit_dir.exists() {
-            anyhow::bail!("No speckit directory found");
+            anyhow::bail!(
+                "No speckit directory found at {} (resolved via {:?}{})",
+                resolved.path.display(),
+                resolved.source,
+                match resolved.store_id.as_deref() {
+                    Some(id) => format!(", store={id}"),
+                    None => String::new(),
+                }
+            );
         }
 
         println!();
         println!("{}", "Speckit Dashboard".bold());
+        if let Some(id) = &resolved.store_id {
+            println!("  {} {}", "Store:".dimmed(), id.cyan());
+        }
+        println!(
+            "  {} {}",
+            "Root:".dimmed(),
+            resolved.path.display().to_string().cyan()
+        );
         println!("{}", "═".repeat(60));
 
         let changes_data = self.get_changes_data(&speckit_dir)?;
@@ -449,7 +485,7 @@ mod tests {
     fn execute_fails_without_speckit_dir() {
         let temp = setup_temp_dir();
         let cmd = ViewCommand::new();
-        let result = cmd.execute(temp.path());
+        let result = cmd.execute(temp.path(), None);
         assert!(result.is_err());
         assert!(
             result
@@ -466,7 +502,7 @@ mod tests {
         fs::create_dir_all(&speckit).unwrap();
 
         let cmd = ViewCommand::new();
-        let result = cmd.execute(temp.path());
+        let result = cmd.execute(temp.path(), None);
         assert!(result.is_ok());
     }
 
@@ -532,22 +568,22 @@ mod tests {
         // 33% done
         let d1 = changes.join("gamma-change");
         fs::create_dir_all(&d1).unwrap();
-        fs::write(&d1.join("tasks.md"), "- [x] Done\n- [ ] A\n- [ ] B\n").unwrap();
+        fs::write(d1.join("tasks.md"), "- [x] Done\n- [ ] A\n- [ ] B\n").unwrap();
 
         // 50% done
         let d2 = changes.join("beta-change");
         fs::create_dir_all(&d2).unwrap();
-        fs::write(&d2.join("tasks.md"), "- [x] Done\n- [ ] Left\n").unwrap();
+        fs::write(d2.join("tasks.md"), "- [x] Done\n- [ ] Left\n").unwrap();
 
         // 50% done (tie-breaker: name)
         let d3 = changes.join("delta-change");
         fs::create_dir_all(&d3).unwrap();
-        fs::write(&d3.join("tasks.md"), "- [x] Done\n- [ ] Left\n").unwrap();
+        fs::write(d3.join("tasks.md"), "- [x] Done\n- [ ] Left\n").unwrap();
 
         // 0% done
         let d4 = changes.join("alpha-change");
         fs::create_dir_all(&d4).unwrap();
-        fs::write(&d4.join("tasks.md"), "- [ ] One\n- [ ] Two\n").unwrap();
+        fs::write(d4.join("tasks.md"), "- [ ] One\n- [ ] Two\n").unwrap();
 
         let data = ViewCommand::new()
             .get_changes_data(&temp.path().join("speckit"))

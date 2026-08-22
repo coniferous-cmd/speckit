@@ -3,6 +3,7 @@
 //! Report relationship health for the resolved Speckit root.
 
 use serde::{Deserialize, Serialize};
+use speckit_core::root_selection::{ResolveSpeckitRootOptions, resolve_speckit_root};
 
 use crate::shared_gather::{ReferenceIndexEntry, StoreDiagnostic, gather_relationship_data};
 use crate::shared_output::print_json;
@@ -49,16 +50,62 @@ pub struct ReferenceHealth {
 }
 
 /// Execute the doctor command.
+///
+/// When `store` is `Some`, the unified root resolver picks that store and
+/// the report's root/store sections reflect the resolved location.  When
+/// `store` is `None`, the working-directory root is used as before.
 pub async fn doctor_command(store: Option<&str>, json: bool) -> anyhow::Result<()> {
-    let project_root = std::env::current_dir()?.to_string_lossy().to_string();
+    let project_root_str = std::env::current_dir()?.to_string_lossy().to_string();
 
-    let data = gather_relationship_data(&project_root).await;
+    // Resolve the Speckit root up-front so that an invalid store surfaces as
+    // a non-zero exit with a stable error code instead of being silently
+    // overridden by the working-directory fallback.
+    let resolved_root = match resolve_speckit_root(&ResolveSpeckitRootOptions {
+        store: store.map(|s| s.to_string()),
+        store_path: None,
+        start_path: Some(std::path::PathBuf::from(&project_root_str)),
+        allow_implicit_root: Some(true),
+        global_data_dir: None,
+    }) {
+        Ok(root) => root,
+        Err(err) => {
+            let diag = &err.diagnostic;
+            if json {
+                print_json(&serde_json::json!({
+                    "status": [{
+                        "severity": "error",
+                        "code": diag.code,
+                        "message": diag.message,
+                        "fix": diag.fix,
+                    }]
+                }));
+            } else {
+                eprintln!("Error: {}", diag.message);
+                if let Some(fix) = diag.fix.as_deref() {
+                    eprintln!("Fix: {fix}");
+                }
+            }
+            return Err(anyhow::anyhow!(diag.message.clone()));
+        }
+    };
+
+    let resolved_root_str = resolved_root.path.to_string_lossy().to_string();
+
+    let data = gather_relationship_data(&resolved_root_str).await;
 
     let root_health = RootHealth {
-        path: project_root.clone(),
+        path: resolved_root_str.clone(),
         healthy: data.root_inspection.healthy,
         status: data.root_inspection.diagnostics.clone(),
     };
+
+    // Use the store_id from the resolved root so JSON output reflects the
+    // actual store that was selected (not the raw CLI argument).
+    let store_health = resolved_root.store_id.as_ref().map(|id| StoreHealth {
+        id: id.clone(),
+        metadata: MetadataHealth { valid: true },
+        status: Vec::new(),
+    });
 
     let references: Vec<ReferenceHealth> = data
         .reference_entries
@@ -72,7 +119,7 @@ pub async fn doctor_command(store: Option<&str>, json: bool) -> anyhow::Result<(
 
     let health = RelationshipHealth {
         root: root_health,
-        store: None,
+        store: store_health,
         references,
         status: Vec::new(),
     };

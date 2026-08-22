@@ -34,7 +34,7 @@ pub struct SchemaInfo {
 
 /// Execute the schemas command.
 pub async fn schemas_command(options: SchemasOptions) -> anyhow::Result<()> {
-    let project_root = std::env::current_dir()?.to_string_lossy().to_string();
+    let project_root = super::resolve_project_root(options.store.as_deref()).await?;
 
     let schemas = list_schemas_with_info(&project_root);
 

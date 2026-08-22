@@ -2,9 +2,11 @@
 //!
 //! Manage Speckit change proposals. (Deprecated: prefer verb-first commands.)
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
+
+use speckit_core::root_selection::{ResolveSpeckitRootOptions, resolve_speckit_root};
 
 use crate::shared_output::StoreDiagnostic;
 
@@ -164,9 +166,7 @@ pub async fn change_show(
 
 /// List active changes.
 pub async fn change_list(options: ChangeListOptions, store: Option<&str>) -> anyhow::Result<()> {
-    // Resolve project root (store support deferred to root resolver)
-    let _ = store;
-    let project_root = std::env::current_dir()?.to_string_lossy().to_string();
+    let project_root = resolve_project_root(store).await?;
     let changes_dir = Path::new(&project_root).join("speckit").join("changes");
 
     let changes = get_active_change_ids(&project_root).await?;
@@ -466,4 +466,25 @@ fn print_next_steps(issues: &[ValidationIssue]) {
 /// Check if stderr is a TTY.
 fn atty_is_tty() -> bool {
     std::io::IsTerminal::is_terminal(&std::io::stderr())
+}
+
+// ---------------------------------------------------------------------------
+// Store / root resolution helpers
+// ---------------------------------------------------------------------------
+
+/// Resolve the Speckit project root for a command, using the unified store
+/// resolver so `--store <id>` actually takes effect instead of silently falling
+/// back to the working directory.
+pub async fn resolve_project_root(store: Option<&str>) -> anyhow::Result<String> {
+    let cwd = std::env::current_dir()
+        .map_err(|e| anyhow::anyhow!("Cannot get current directory: {e}"))?;
+    let resolved = resolve_speckit_root(&ResolveSpeckitRootOptions {
+        store: store.map(|s| s.to_string()),
+        store_path: None,
+        start_path: Some(cwd),
+        allow_implicit_root: Some(true),
+        global_data_dir: None,
+    })
+    .map_err(|e| anyhow::anyhow!("{}", e.diagnostic.message))?;
+    Ok(resolved.path.to_string_lossy().into_owned())
 }

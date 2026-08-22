@@ -100,7 +100,7 @@ fn global_data_dir() -> PathBuf {
 pub fn get_stores_dir(global_data_dir: Option<&Path>) -> PathBuf {
     let base = global_data_dir
         .map(Path::to_path_buf)
-        .unwrap_or_else(|| get_global_data_dir());
+        .unwrap_or_else(get_global_data_dir);
     base.join(STORES_DIR_NAME)
 }
 
@@ -470,25 +470,23 @@ pub fn resolve_git_store_backend_config(
         ));
     }
 
-    if let Some(ref remote) = input.remote {
-        if remote.is_empty() {
+    if let Some(ref remote) = input.remote
+        && remote.is_empty() {
             return Err(StoreError::new(
                 "Store backend remote must not be empty when provided.",
                 "store_remote_empty",
                 StoreErrorOptions::default(),
             ));
         }
-    }
 
-    if let Some(ref branch) = input.branch {
-        if branch.is_empty() {
+    if let Some(ref branch) = input.branch
+        && branch.is_empty() {
             return Err(StoreError::new(
                 "Store branch must not be empty when provided.",
                 "store_branch_empty",
                 StoreErrorOptions::default(),
             ));
         }
-    }
 
     Ok(StoreGitBackendConfig {
         backend_type: "git".into(),

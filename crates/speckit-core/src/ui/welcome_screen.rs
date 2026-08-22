@@ -74,12 +74,10 @@ pub fn prefers_reduced_motion() -> bool {
         if let Ok(output) = std::process::Command::new("defaults")
             .args(["read", "com.apple.universalaccess", "reduceMotion"])
             .output()
-        {
-            if output.status.success() {
+            && output.status.success() {
                 let stdout = String::from_utf8_lossy(&output.stdout);
                 return stdout.trim() == "1";
             }
-        }
     }
 
     #[cfg(target_os = "linux")]
@@ -171,7 +169,7 @@ unsafe extern "C" {
 /// Wait for Enter key press from stdin.
 fn wait_for_enter() -> io::Result<()> {
     let mut stdout = io::stdout();
-    write!(stdout, "\n")?;
+    writeln!(stdout)?;
     stdout.flush()?;
 
     let mut input = String::new();
@@ -203,7 +201,7 @@ pub fn show_welcome_screen(workflows: &[String], animate: Option<bool>) -> io::R
 
     // Animated welcome screen.
     let mut stdout = io::stdout();
-    write!(stdout, "\n")?;
+    writeln!(stdout)?;
     stdout.flush()?;
 
     let frame_height = animation.frames[0].len().max(text_lines.len());
@@ -246,7 +244,7 @@ pub fn show_welcome_screen(workflows: &[String], animate: Option<bool>) -> io::R
 
     // Clear the welcome screen.
     for _ in 0..total_height {
-        print!("\x1b[2K\n");
+        println!("\x1b[2K");
     }
     print!("\x1b[{total_height}A");
     io::stdout().flush()?;

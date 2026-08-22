@@ -470,10 +470,7 @@ fn parse_declaration_list(raw: &serde_yaml::Value) -> Option<Vec<DeclarationEntr
 /// Returns `None` if the file doesn't exist.
 /// Returns a partial config if some fields are invalid (with warnings).
 pub fn read_project_config(project_root: &Path) -> Option<ProjectConfig> {
-    let config_path = match resolve_config_file_path(project_root) {
-        Some(p) => p,
-        None => return None,
-    };
+    let config_path = resolve_config_file_path(project_root)?;
 
     let content = match fs::read_to_string(&config_path) {
         Ok(c) => c,
@@ -595,13 +592,13 @@ pub fn read_project_config(project_root: &Path) -> Option<ProjectConfig> {
 
     // Parse operations field.
     let ops_key = serde_yaml::Value::String("operations".into());
-    let operations = raw_mapping.get(&ops_key).and_then(|v| parse_operations(v));
+    let operations = raw_mapping.get(&ops_key).and_then(parse_operations);
 
     // Parse references field.
     let refs_key = serde_yaml::Value::String("references".into());
     let references = raw_mapping
         .get(&refs_key)
-        .and_then(|v| parse_declaration_list(v));
+        .and_then(parse_declaration_list);
 
     // Parse store pointer field.
     let store_key = serde_yaml::Value::String("store".into());

@@ -34,11 +34,10 @@ const CONFIG_FILE_NAME: &str = "config.json";
 /// Returns the path to the global config directory.
 fn get_config_dir() -> PathBuf {
     // XDG_CONFIG_HOME takes precedence.
-    if let Ok(xdg) = std::env::var("XDG_CONFIG_HOME") {
-        if !xdg.is_empty() {
+    if let Ok(xdg) = std::env::var("XDG_CONFIG_HOME")
+        && !xdg.is_empty() {
             return PathBuf::from(xdg).join(CONFIG_DIR_NAME);
         }
-    }
 
     #[cfg(target_os = "windows")]
     {
@@ -94,7 +93,7 @@ fn migrate_legacy_telemetry(config_path: &PathBuf, config: &mut GlobalConfigFile
         return false;
     }
 
-    let _telemetry = match &config.telemetry {
+    match &config.telemetry {
         Some(t) if t.anonymous_id.is_some() && t.notice_seen.is_some() => return false,
         _ => {}
     };
@@ -120,7 +119,7 @@ fn migrate_legacy_telemetry(config_path: &PathBuf, config: &mut GlobalConfigFile
     }
 
     if current_telemetry.notice_seen.is_none() && legacy_telemetry.notice_seen.is_some() {
-        current_telemetry.notice_seen = legacy_telemetry.notice_seen.clone();
+        current_telemetry.notice_seen = legacy_telemetry.notice_seen;
         changed = true;
     }
 

@@ -5,7 +5,7 @@
 //! every trace. Nothing here is committed, shared, or derived from
 //! declarations, and nothing is ever written into a member folder.
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -75,8 +75,9 @@ pub struct WorksetEntry {
 pub struct WorksetsState {
     /// Schema version; always 1.
     pub version: u32,
-    /// Map from workset kebab-name to entry.
-    pub worksets: HashMap<String, WorksetEntry>,
+    /// Map from workset kebab-name to entry.  BTreeMap keeps keys sorted so
+    /// round-trips and listing are deterministic.
+    pub worksets: BTreeMap<String, WorksetEntry>,
 }
 
 // ---------------------------------------------------------------------------
@@ -274,7 +275,7 @@ pub fn read_worksets_state(options: &WorksetPathOptions) -> Result<WorksetsState
     if !file_path.exists() {
         return Ok(WorksetsState {
             version: 1,
-            worksets: HashMap::new(),
+            worksets: BTreeMap::new(),
         });
     }
 
@@ -514,7 +515,6 @@ pub fn build_workset_code_workspace_json(members: &[WorksetMember]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs;
     use tempfile::TempDir;
 
     fn temp_options(tmp: &TempDir) -> WorksetPathOptions {
@@ -629,7 +629,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let opts = temp_options(&tmp);
 
-        let mut worksets = HashMap::new();
+        let mut worksets = BTreeMap::new();
         worksets.insert(
             "zeta".into(),
             WorksetEntry {
@@ -743,7 +743,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let empty = WorksetsState {
             version: 1,
-            worksets: HashMap::new(),
+            worksets: BTreeMap::new(),
         };
         let workset = Workset {
             name: "platform".into(),
@@ -774,7 +774,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let empty = WorksetsState {
             version: 1,
-            worksets: HashMap::new(),
+            worksets: BTreeMap::new(),
         };
         let ws = Workset {
             name: "platform".into(),
@@ -797,7 +797,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let empty = WorksetsState {
             version: 1,
-            worksets: HashMap::new(),
+            worksets: BTreeMap::new(),
         };
         let ws = Workset {
             name: "platform".into(),
@@ -836,7 +836,7 @@ mod tests {
 
         let empty = WorksetsState {
             version: 1,
-            worksets: HashMap::new(),
+            worksets: BTreeMap::new(),
         };
         let ws = Workset {
             name: "platform".into(),

@@ -10,7 +10,7 @@ use std::path::Path;
 use crate::config::AI_TOOLS;
 use crate::legacy_cleanup;
 use crate::migration;
-use crate::planning_home;
+use crate::profiles::resolve_profile_and_workflow_filter;
 
 /// Options for the update command.
 #[derive(Debug, Clone, Default)]
@@ -88,6 +88,18 @@ impl UpdateCommand {
         // 6. Find configured tools
         let configured_tools = self.get_configured_tools(&resolved_path);
 
+        // 6b. Reconcile GitHub Copilot cloud files if the tool is configured.
+        // Uses persisted opt-in from config.yaml; update is non-interactive so
+        // it never prompts.
+        if configured_tools.iter().any(|id| id == "github-copilot") {
+            if let Some(opt_in) = crate::github_copilot::read_copilot_cloud_opt_in(&resolved_path) {
+                let _ = crate::github_copilot::write_copilot_cloud_files(&resolved_path, Some(opt_in))?;
+            } else if crate::github_copilot::has_existing_managed_cloud_files(&resolved_path) {
+                // Migration: managed files exist, honor them.
+                let _ = crate::github_copilot::write_copilot_cloud_files(&resolved_path, Some(true))?;
+            }
+        }
+
         if configured_tools.is_empty() {
             println!("No configured tools found.");
             println!("Run 'speckit init' to set up tools.");
@@ -120,6 +132,9 @@ impl UpdateCommand {
         println!();
 
         // 10. Update tools
+        // Resolve the profile filter so `init` and `update` always agree on the
+        // same set of skills to emit.
+        let (_, workflow_filter) = resolve_profile_and_workflow_filter(None, Some(&resolved_path));
         let mut updated_tools = Vec::new();
         let mut failed_tools = Vec::new();
 
@@ -131,7 +146,7 @@ impl UpdateCommand {
 
             println!("Updating {}...", tool.name);
 
-            match self.update_tool(&resolved_path, tool_id) {
+            match self.update_tool(&resolved_path, tool_id, workflow_filter.as_deref()) {
                 Ok(_) => {
                     println!("Updated {}", tool.name);
                     updated_tools.push(tool.name.clone());
@@ -161,11 +176,10 @@ impl UpdateCommand {
 
         // 13. Show setup notes
         for tool_id in &configured_tools {
-            if let Some(tool) = AI_TOOLS.iter().find(|t| t.value == *tool_id) {
-                if let Some(ref note) = tool.setup_note {
+            if let Some(tool) = AI_TOOLS.iter().find(|t| t.value == *tool_id)
+                && let Some(ref note) = tool.setup_note {
                     println!("Setup required for {}: {}", tool.name, note);
                 }
-            }
         }
 
         println!();
@@ -226,8 +240,8 @@ impl UpdateCommand {
             .iter()
             .filter(|tool_id| {
                 // Simple check: look for skill directories and compare
-                if let Some(tool) = AI_TOOLS.iter().find(|t| t.value == **tool_id) {
-                    if let Some(ref skills_dir) = tool.skills_dir {
+                if let Some(tool) = AI_TOOLS.iter().find(|t| t.value == **tool_id)
+                    && let Some(ref skills_dir) = tool.skills_dir {
                         let skills_path = project_path.join(skills_dir).join("skills");
                         // If skills dir exists but is empty or missing SKILL.md files,
                         // mark as needing update
@@ -242,7 +256,6 @@ impl UpdateCommand {
                             return !has_any_skill;
                         }
                     }
-                }
                 false
             })
             .cloned()
@@ -256,7 +269,15 @@ impl UpdateCommand {
     /// exact same content as `init` would), and removes any leftover skill
     /// directory that is no longer in the registry. Unmanaged skill files
     /// (anything not produced by the canonical generator) are preserved.
-    fn update_tool(&self, project_path: &Path, tool_id: &str) -> Result<()> {
+    ///
+    /// The `workflow_filter` comes from the profile resolver so `init` and
+    /// `update` always agree on which skills to emit.
+    fn update_tool(
+        &self,
+        project_path: &Path,
+        tool_id: &str,
+        workflow_filter: Option<&[String]>,
+    ) -> Result<()> {
         let tool = AI_TOOLS
             .iter()
             .find(|t| t.value == tool_id)
@@ -270,14 +291,11 @@ impl UpdateCommand {
         let skills_path = project_path.join(skills_dir).join("skills");
         std::fs::create_dir_all(&skills_path)?;
 
-        let skill_entries = crate::templates::generation::get_skill_templates(None);
-        let generated_by_version =
-            crate::templates::generation::speckit_generated_by_version();
+        let skill_entries = crate::templates::generation::get_skill_templates(workflow_filter);
+        let generated_by_version = crate::templates::generation::speckit_generated_by_version();
         let current_version = generated_by_version.clone();
-        let canonical_dirs: std::collections::HashSet<String> = skill_entries
-            .iter()
-            .map(|e| e.dir_name.clone())
-            .collect();
+        let canonical_dirs: std::collections::HashSet<String> =
+            skill_entries.iter().map(|e| e.dir_name.clone()).collect();
 
         for entry in &skill_entries {
             let skill_dir = skills_path.join(&entry.dir_name);
@@ -335,12 +353,7 @@ impl UpdateCommand {
         expected_workflow: &str,
         current_version: &str,
     ) -> Result<bool> {
-        Self::skill_needs_update_static(
-            skill_file,
-            "",
-            expected_workflow,
-            current_version,
-        )
+        Self::skill_needs_update_static(skill_file, "", expected_workflow, current_version)
     }
 
     /// Pure-function form of `skill_needs_update` that does not depend on

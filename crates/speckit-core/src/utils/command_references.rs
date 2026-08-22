@@ -203,14 +203,13 @@ pub fn get_transformer_for_tool(
         return Some(get_skill_reference_transformer(tool_id));
     }
 
-    if let Some(inv) = invocation {
-        if inv.needs_rewrite() {
+    if let Some(inv) = invocation
+        && inv.needs_rewrite() {
             let inv = inv.clone();
             return Some(Box::new(move |text: &str| {
                 transform_command_invocations(text, &inv)
             }));
         }
-    }
 
     None
 }

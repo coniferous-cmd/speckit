@@ -22,7 +22,7 @@ pub struct ShowOptions {
 
 /// Execute the top-level show command.
 pub async fn show_command(item_name: Option<&str>, options: ShowOptions) -> anyhow::Result<()> {
-    let project_root = std::env::current_dir()?.to_string_lossy().to_string();
+    let project_root = crate::change::resolve_project_root(options.store.as_deref()).await?;
 
     let type_override =
         options

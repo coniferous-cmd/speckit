@@ -39,7 +39,9 @@ pub fn get_explore_skill_template() -> SkillTemplate {
 pub fn get_opsx_explore_command_template() -> CommandTemplate {
     CommandTemplate {
         name: "SPECKIT: Explore".into(),
-        description: "Enter explore mode - think through ideas, investigate problems, clarify requirements".into(),
+        description:
+            "Enter explore mode - think through ideas, investigate problems, clarify requirements"
+                .into(),
         category: "Workflow".into(),
         tags: vec![
             "workflow".into(),

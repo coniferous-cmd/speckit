@@ -23,6 +23,12 @@ pub struct CommandRegistry {
     commands: Vec<RegisteredCommand>,
 }
 
+impl Default for CommandRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CommandRegistry {
     pub fn new() -> Self {
         Self {

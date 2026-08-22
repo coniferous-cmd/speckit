@@ -47,7 +47,7 @@ pub async fn context_command(
     code_workspace: Option<&str>,
     force: bool,
 ) -> anyhow::Result<()> {
-    let project_root = std::env::current_dir()?.to_string_lossy().to_string();
+    let project_root = crate::change::resolve_project_root(store).await?;
 
     let data = gather_relationship_data(&project_root).await;
 

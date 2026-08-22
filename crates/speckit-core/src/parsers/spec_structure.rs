@@ -95,10 +95,24 @@ pub fn find_main_spec_structure_issues(content: &str) -> Vec<MainSpecStructureIs
         }
     }
 
+    // Tracks the line index of the most recently seen delta header.  When
+    // `Some(end)`, a `### Requirement:` header nested inside the delta
+    // section is considered part of the delta section rather than a
+    // standalone requirement header outside the canonical `## Requirements`
+    // section.
+    let mut delta_section_end: Option<usize> = None;
+
     for (i, line) in lines.iter().enumerate() {
         let trimmed = line.trim();
         if trimmed.is_empty() {
             continue;
+        }
+
+        // Close the current delta section when we encounter a different
+        // top-level section header (i.e. anything starting with `## ` that
+        // is not itself a delta header).
+        if delta_section_end.is_some() && TOP_LEVEL_SECTION_HEADER.is_match(line) {
+            delta_section_end = None;
         }
 
         // Check for delta headers (invalid in main specs).
@@ -115,6 +129,9 @@ pub fn find_main_spec_structure_issues(content: &str) -> Vec<MainSpecStructureIs
                     trimmed
                 ),
             });
+            // Anything after the delta header, up to the next top-level
+            // section, belongs to the (invalid) delta section.
+            delta_section_end = Some(lines.len());
             continue;
         }
 
@@ -127,8 +144,17 @@ pub fn find_main_spec_structure_issues(content: &str) -> Vec<MainSpecStructureIs
         let inside_requirements = requirements_header_index.is_some()
             && i > requirements_header_index.unwrap()
             && i < requirements_end_index;
+        let inside_delta_section = delta_section_end.is_some();
+        let has_requirements_section = requirements_header_index.is_some();
 
-        if !inside_requirements {
+        // A `### Requirement:` header inside a delta section is only
+        // considered "inside" when the document has no canonical
+        // `## Requirements` section of its own.  When both sections are
+        // present, requirement headers appearing before the
+        // `## Requirements` section are still flagged as outside.
+        let suppress_outside = inside_delta_section && !has_requirements_section;
+
+        if !inside_requirements && !suppress_outside {
             issues.push(MainSpecStructureIssue {
                 kind: MainSpecIssueKind::RequirementOutsideRequirements,
                 line: i + 1,

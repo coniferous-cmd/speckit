@@ -17,6 +17,7 @@ const DEFAULT_ALLOWED_TOOLS: &[&str] = &[
 
 /// Configuration for allowed tools in a project.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct AllowedToolsConfig {
     /// Additional tools beyond the defaults.
     #[serde(default)]
@@ -26,14 +27,6 @@ pub struct AllowedToolsConfig {
     pub deny: Vec<String>,
 }
 
-impl Default for AllowedToolsConfig {
-    fn default() -> Self {
-        Self {
-            allow: Vec::new(),
-            deny: Vec::new(),
-        }
-    }
-}
 
 /// Resolves the effective set of allowed tools given a config.
 ///

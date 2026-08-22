@@ -247,11 +247,10 @@ pub fn delete_nested_value(obj: &mut serde_json::Value, path: &str) -> bool {
         }
     }
 
-    if let Some(last_key) = keys.last() {
-        if let Some(map) = current.as_object_mut() {
+    if let Some(last_key) = keys.last()
+        && let Some(map) = current.as_object_mut() {
             return map.remove(*last_key).is_some();
         }
-    }
     false
 }
 
@@ -280,18 +279,15 @@ pub fn coerce_value(value: &str, force_string: bool) -> serde_json::Value {
 
     // Number coercion -- must be a valid finite number.
     // Try integer first so that "42" becomes 42 (not 42.0).
-    if let Ok(num) = value.parse::<i64>() {
-        if !value.trim().is_empty() {
+    if let Ok(num) = value.parse::<i64>()
+        && !value.trim().is_empty() {
             return serde_json::Value::Number(num.into());
         }
-    }
-    if let Ok(num) = value.parse::<f64>() {
-        if num.is_finite() && !value.trim().is_empty() {
-            if let Some(n) = serde_json::Number::from_f64(num) {
+    if let Ok(num) = value.parse::<f64>()
+        && num.is_finite() && !value.trim().is_empty()
+            && let Some(n) = serde_json::Number::from_f64(num) {
                 return serde_json::Value::Number(n);
             }
-        }
-    }
 
     // JSON container coercion.
     if let Some(container) = parse_json_container(value) {

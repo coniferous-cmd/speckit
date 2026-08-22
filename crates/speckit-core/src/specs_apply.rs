@@ -3,7 +3,7 @@
 //! Applies delta specs from a change to main specs without archiving.
 
 use anyhow::Result;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -117,8 +117,8 @@ pub fn build_updated_spec(
     let mut modified_applied = 0;
     for mod_req in &plan.modified {
         let key = normalize_requirement_name(&mod_req.name);
-        if requirements.contains_key(&key) {
-            requirements.insert(key, mod_req.raw.clone());
+        if let std::collections::hash_map::Entry::Occupied(mut e) = requirements.entry(key) {
+            e.insert(mod_req.raw.clone());
             modified_applied += 1;
         } else {
             return Err(anyhow::anyhow!(

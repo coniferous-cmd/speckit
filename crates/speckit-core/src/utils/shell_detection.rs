@@ -32,11 +32,10 @@ pub fn detect_shell() -> Shell {
     }
 
     // Check COMSPEC (Windows)
-    if let Ok(comspec) = env::var("COMSPEC") {
-        if comspec.contains("cmd.exe") {
+    if let Ok(comspec) = env::var("COMSPEC")
+        && comspec.contains("cmd.exe") {
             return Shell::Cmd;
         }
-    }
 
     Shell::Unknown
 }

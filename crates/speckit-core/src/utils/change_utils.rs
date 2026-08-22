@@ -30,11 +30,10 @@ pub fn list_changes(changes_dir: &Path) -> Result<Vec<String>> {
         let entry = entry?;
         let path = entry.path();
 
-        if path.is_dir() && is_change_directory(&path) {
-            if let Some(name) = get_change_name(&path) {
+        if path.is_dir() && is_change_directory(&path)
+            && let Some(name) = get_change_name(&path) {
                 changes.push(name);
             }
-        }
     }
 
     changes.sort();

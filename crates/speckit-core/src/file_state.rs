@@ -229,11 +229,10 @@ pub fn release_file_lock(lock: FileLock) {
     drop(lock.file);
 
     // Read the current token; only delete if we still own it.
-    if let Ok(current_token) = fs::read_to_string(&lock.lock_path) {
-        if current_token == lock.ownership_token {
+    if let Ok(current_token) = fs::read_to_string(&lock.lock_path)
+        && current_token == lock.ownership_token {
             let _ = fs::remove_file(&lock.lock_path);
         }
-    }
 }
 
 #[cfg(test)]

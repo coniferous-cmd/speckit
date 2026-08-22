@@ -17,13 +17,11 @@ pub fn discover_spec_files(specs_dir: &Path) -> anyhow::Result<Vec<PathBuf>> {
         let entry = entry?;
         let path = entry.path();
 
-        if path.is_file() {
-            if let Some(ext) = path.extension() {
-                if ext == "md" {
+        if path.is_file()
+            && let Some(ext) = path.extension()
+                && ext == "md" {
                     spec_files.push(path.to_path_buf());
                 }
-            }
-        }
     }
 
     Ok(spec_files)
@@ -81,7 +79,6 @@ fn is_hidden_entry(path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs;
 
     #[test]
     fn test_discover_spec_files_nonexistent() {

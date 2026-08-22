@@ -9,7 +9,7 @@
 //! Both modes accept sort order (`recent` / `name`) and a JSON flag.
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use anyhow::{Context, Result};
 use chrono::{DateTime, Local};
@@ -26,31 +26,25 @@ use crate::utils::task_progress::{TaskProgress, format_task_status, get_task_pro
 
 /// Sort order for list output.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
 pub enum ListSort {
     /// Most-recently modified first (default).
+    #[default]
     Recent,
     /// Alphabetical by name.
     Name,
 }
 
-impl Default for ListSort {
-    fn default() -> Self {
-        Self::Recent
-    }
-}
 
 /// Mode selector: list changes or specs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
 pub enum ListMode {
+    #[default]
     Changes,
     Specs,
 }
 
-impl Default for ListMode {
-    fn default() -> Self {
-        Self::Changes
-    }
-}
 
 /// Options controlling list behaviour.
 #[derive(Debug, Clone, Default)]

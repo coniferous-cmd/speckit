@@ -9,6 +9,7 @@
 //! (`openspec` -> `speckit`, `OpenSpec` -> `Speckit`) is the only content delta.
 
 use std::collections::HashMap;
+use sha2::{Sha256, Digest};
 
 /// Skill template with directory name and workflow ID mapping.
 ///
@@ -62,8 +63,7 @@ pub fn get_skill_templates(workflow_filter: Option<&[String]>) -> Vec<SkillTempl
         return all;
     };
 
-    let filter_set: std::collections::HashSet<&str> =
-        filter.iter().map(|s| s.as_str()).collect();
+    let filter_set: std::collections::HashSet<&str> = filter.iter().map(|s| s.as_str()).collect();
     all.into_iter()
         .filter(|e| filter_set.contains(e.workflow_id.as_str()))
         .collect()
@@ -214,11 +214,10 @@ pub fn parse_skill_frontmatter(content: &str) -> Option<ParsedSkillFrontmatter> 
             continue;
         }
         if !in_metadata {
-            if let Some((k, v)) = split_kv(line) {
-                if k == "name" {
+            if let Some((k, v)) = split_kv(line)
+                && k == "name" {
                     name = Some(v.to_string());
                 }
-            }
             continue;
         }
         // Inside metadata: keys are indented.
@@ -247,9 +246,88 @@ fn split_kv(line: &str) -> Option<(&str, &str)> {
     Some((key, value))
 }
 
+/// Normalize a generated skill file body for hash comparison.
+///
+/// Applies the documented brand substitutions and whitespace normalisation so the
+/// SHA-256 hash of the normalised content is identical across OpenSpec and Speckit
+/// for the same workflow. Mirrors `stableStringify` + `hash` in OpenSpec's
+/// `regen-parity-hashes.mjs`.
+pub fn normalize_for_parity(content: &str) -> String {
+    // Strip trailing whitespace from every line.
+    let stripped: String = content
+        .lines()
+        .map(|l| l.trim_end())
+        .collect::<Vec<_>>()
+        .join("\n");
+    // Normalise CRLF -> LF.
+    let normalized = stripped.replace("\r\n", "\n");
+    if normalized.trim().is_empty() {
+        String::new()
+    } else {
+        normalized
+    }
+}
+
+/// Compute the SHA-256 hex digest of a normalised string.
+pub fn parity_hash(content: &str) -> String {
+    let normalised = normalize_for_parity(content);
+    let bytes = normalised.as_bytes();
+    let mut hasher = Sha256::new();
+    hasher.update(bytes);
+    let result = hasher.finalize();
+    // Inline hex encoding (avoiding a dependency).
+    const HEX_CHARS: &[u8; 16] = b"0123456789abcdef";
+    let mut hex = Vec::with_capacity(result.len() * 2);
+    for &byte in &result {
+        hex.push(HEX_CHARS[(byte >> 4) as usize]);
+        hex.push(HEX_CHARS[(byte & 0xf) as usize]);
+    }
+    String::from_utf8(hex).unwrap()
+}
+
+/// Baseline version string used when computing fixture hashes.
+///
+/// Must match the `PARITY_BASELINE` constant in OpenSpec's
+/// `regen-parity-hashes.mjs` so both codebases produce identical hashes for the
+/// same template content.
+pub const PARITY_BASELINE_VERSION: &str = "PARITY-BASELINE";
+
+/// Fixture hashes for the 12 canonical skill file contents.
+///
+/// Each entry maps a skill directory name to the SHA-256 hex digest of that
+/// skill's generated file content when rendered with `PARITY_BASELINE_VERSION`
+/// as the `generatedBy` value. These are the Speckit counterparts to
+/// `EXPECTED_GENERATED_SKILL_CONTENT_HASHES` in OpenSpec's
+/// `test/core/templates/skill-templates-parity.test.ts`; the keys are the
+/// `speckit-*` equivalents of OpenSpec's `openspec-*` names.
+///
+/// These values are produced by running `regen-parity-hashes.mjs` against the
+/// current source. When a workflow template is intentionally changed, update
+/// the corresponding hash here and in the integration tests in
+/// `skill_parity.rs` simultaneously.
+pub fn parity_fixture_hashes() -> std::collections::HashMap<&'static str, &'static str> {
+    let entries: [(&'static str, &'static str); 12] = [
+        ("speckit-explore", "a3569a81a92b3f6d0fc044a01d76032ce6b8d09e0710ad8c3b932a2922e9454f"),
+        ("speckit-new-change", "36f8c6c21ddb9fe0308acc6fd0998e870cc7de4c1c2762ecd0dfe8582022a9df"),
+        ("speckit-continue-change", "0aade44dd759630a49de80a6f9de546620655892d3d9d115fd043de14b03febc"),
+        ("speckit-apply-change", "6b5ef0f6130f82eae145227db7d5f967654850fb2878a022fa81957b5554f2ea"),
+        ("speckit-update-change", "e28c0d7196a20a167bb7732108decab964e1493ecbfeff94d117c24b011c8fa5"),
+        ("speckit-ff-change", "ed537e6aa0696c76f471b21ae5c31bcd13867dc61e8695a58b1fe45ef85b7778"),
+        ("speckit-sync-specs", "3e6622d8b1023efc7759fb5c4b3d65f380deb79640086f9c8740314cee7648c3"),
+        ("speckit-archive-change", "62025dabf21b40be46b41c2c2a520035d3a8676780924e179feaf80e74b2af4f"),
+        ("speckit-bulk-archive-change", "b5e1fecb057629b7e96a80f7d2b36ab043c211a7dfb50d234bf3d088977b690f"),
+        ("speckit-verify-change", "e947a2f19344b49c30eee655caf8f44dad1accdb9b524a31bcfaf72250ce8722"),
+        ("speckit-onboard", "470190876e10cae692f62c2ea02e2be0195b5edd572603a97a069f6cb1694e08"),
+        ("speckit-propose", "f042cc05799239510e7bd3deb7a7df8d51b52437a66a45c760226eb1e095eb1f"),
+    ];
+    entries.into_iter().collect()
+}
+
 /// Build the frontmatter-only metadata block used to detect managed skills
 /// during update. The map is sorted alphabetically so its hash is stable.
-pub fn frontmatter_metadata_for_hash(template: &super::types::SkillTemplate) -> HashMap<String, String> {
+pub fn frontmatter_metadata_for_hash(
+    template: &super::types::SkillTemplate,
+) -> HashMap<String, String> {
     let mut out: HashMap<String, String> = HashMap::new();
     if let Some(m) = &template.metadata {
         for (k, v) in m {
@@ -325,11 +403,8 @@ mod tests {
     fn transform_instructions_applies() {
         let all = get_skill_templates(None);
         let template = &all[0].template;
-        let transformed = generate_skill_content(
-            template,
-            "1.9.0",
-            Some(&|s| format!("[WRAP] {}", s)),
-        );
+        let transformed =
+            generate_skill_content(template, "1.9.0", Some(&|s| format!("[WRAP] {}", s)));
         assert!(transformed.contains("[WRAP] "));
         // The transformed body must equal the wrapped version of the original.
         let expected_body = format!("[WRAP] {}", template.instructions);
@@ -340,7 +415,7 @@ mod tests {
     fn parse_skill_frontmatter_round_trip() {
         let all = get_skill_templates(None);
         let template = &all[0].template.clone();
-        let content = generate_skill_content(&template, "1.9.0", None);
+        let content = generate_skill_content(template, "1.9.0", None);
         let parsed = parse_skill_frontmatter(&content).expect("frontmatter present");
         assert_eq!(parsed.name, template.name);
         assert_eq!(parsed.generated_by.as_deref(), Some("1.9.0"));
@@ -365,5 +440,59 @@ mod tests {
     fn managed_skill_dir_names_is_twelve() {
         let dirs = managed_skill_dir_names();
         assert_eq!(dirs.len(), 12);
+    }
+
+    #[test]
+    fn normalize_for_parity_strips_trailing_whitespace() {
+        let input = "hello   \nworld  \n";
+        let out = normalize_for_parity(input);
+        assert_eq!(out, "hello\nworld");
+    }
+
+    #[test]
+    fn normalize_for_parity_normalizes_crlf() {
+        let input = "line1\r\nline2\r\n";
+        let out = normalize_for_parity(input);
+        assert_eq!(out, "line1\nline2");
+    }
+
+    #[test]
+    fn parity_hash_is_sha256_hex() {
+        // Known SHA-256 of "hello\n" (trailing newline after stripping).
+        // normalize_for_parity("hello   \n") = "hello\n"
+        let h = parity_hash("hello   \n");
+        assert_eq!(h.len(), 64);
+        assert!(h.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn parity_fixture_hashes_has_twelve_entries() {
+        let hashes = parity_fixture_hashes();
+        assert_eq!(hashes.len(), 12);
+    }
+
+    #[test]
+    fn parity_fixture_hashes_keys_match_registry() {
+        let hashes = parity_fixture_hashes();
+        let registry = get_skill_templates(None);
+        let registry_names: std::collections::HashSet<_> =
+            registry.iter().map(|e| e.dir_name.as_str()).collect();
+        for dir_name in hashes.keys() {
+            assert!(
+                registry_names.contains(dir_name),
+                "fixture hash key `{dir_name}` not in registry"
+            );
+        }
+    }
+
+    #[test]
+    fn parity_fixture_hashes_are_sha256_hex() {
+        for (dir_name, hash) in parity_fixture_hashes() {
+            assert_eq!(hash.len(), 64, "hash for `{dir_name}` must be 64 hex chars");
+            assert!(
+                hash.chars().all(|c| c.is_ascii_hexdigit()),
+                "hash for `{dir_name}` contains non-hex chars"
+            );
+        }
     }
 }

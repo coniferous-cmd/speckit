@@ -10,6 +10,7 @@
 //! context to localize the regression without re-reading the plan.
 
 use speckit_core::templates::generation::{
+    normalize_for_parity, parity_fixture_hashes, parity_hash,
     generate_skill_content, get_skill_templates, parse_skill_frontmatter,
     speckit_generated_by_version, SPECKIT_CLI_ALLOWED_TOOLS,
 };
@@ -204,26 +205,26 @@ fn instructions_reference_speckit_cli() {
 #[test]
 fn frontmatter_contains_required_fields() {
     let entries = get_skill_templates(None);
-    let version = speckit_generated_by_version();
+    let version = speckit_core::templates::generation::PARITY_BASELINE_VERSION.to_string();
     for entry in &entries {
         let content = generate_skill_content(&entry.template, &version, None);
-        assert!(content.starts_with("---\n"), "frontmatter must start with ---");
+        assert!(
+            content.starts_with("---\n"),
+            "frontmatter must start with ---"
+        );
         assert!(content.contains(&format!("name: {}\n", entry.template.name)));
-        assert!(content.contains(&format!(
-            "description: {}\n",
-            entry.template.description
-        )));
-        assert!(content.contains(&format!(
-            "allowed-tools: {}\n",
-            SPECKIT_CLI_ALLOWED_TOOLS
-        )));
+        assert!(content.contains(&format!("description: {}\n", entry.template.description)));
+        assert!(content.contains(&format!("allowed-tools: {}\n", SPECKIT_CLI_ALLOWED_TOOLS)));
         assert!(content.contains("license: MIT\n"));
         assert!(content.contains("compatibility: Requires speckit CLI.\n"));
         assert!(content.contains("author: speckit\n"));
         assert!(content.contains("version: \"1.0\"\n"));
         assert!(content.contains(&format!("generatedBy: \"{}\"\n", version)));
         // Body must follow frontmatter
-        assert!(content.contains("\n---\n\n"), "frontmatter must close before body");
+        assert!(
+            content.contains("\n---\n\n"),
+            "frontmatter must close before body"
+        );
     }
 }
 
@@ -248,7 +249,9 @@ fn frontmatter_field_order_is_stable() {
         "  version:",
         "  generatedBy:",
     ] {
-        let found = fm[pos..].find(key).unwrap_or_else(|| panic!("missing {key}"));
+        let found = fm[pos..]
+            .find(key)
+            .unwrap_or_else(|| panic!("missing {key}"));
         pos += found;
     }
 }
@@ -302,12 +305,11 @@ fn workflow_filter_with_unknown_id_yields_zero() {
 #[test]
 fn frontmatter_parse_round_trip_for_every_template() {
     let entries = get_skill_templates(None);
-    let version = speckit_generated_by_version();
+    let version = speckit_core::templates::generation::PARITY_BASELINE_VERSION.to_string();
     for entry in &entries {
         let content = generate_skill_content(&entry.template, &version, None);
-        let parsed = parse_skill_frontmatter(&content).unwrap_or_else(|| {
-            panic!("frontmatter unparseable for `{}`", entry.workflow_id)
-        });
+        let parsed = parse_skill_frontmatter(&content)
+            .unwrap_or_else(|| panic!("frontmatter unparseable for `{}`", entry.workflow_id));
         assert_eq!(parsed.name, entry.template.name);
         assert_eq!(parsed.generated_by.as_deref(), Some(version.as_str()));
         assert_eq!(parsed.version.as_deref(), Some("1.0"));
@@ -338,7 +340,8 @@ fn parse_skill_frontmatter_handles_unterminated() {
 #[test]
 fn generated_body_matches_canonical_template_body() {
     let entries = get_skill_templates(None);
-    let version = speckit_generated_by_version();
+    let version =
+        speckit_core::templates::generation::PARITY_BASELINE_VERSION.to_string();
     for entry in &entries {
         let content = generate_skill_content(&entry.template, &version, None);
         // The body begins right after the closing frontmatter line.
@@ -363,8 +366,8 @@ fn generate_skill_content_is_deterministic() {
     let entries = get_skill_templates(None);
     let template = &entries[0].template.clone();
     let version = speckit_generated_by_version();
-    let a = generate_skill_content(&template, &version, None);
-    let b = generate_skill_content(&template, &version, None);
+    let a = generate_skill_content(template, &version, None);
+    let b = generate_skill_content(template, &version, None);
     assert_eq!(a, b, "generator output must be deterministic");
 }
 
@@ -374,7 +377,10 @@ fn different_versions_emit_different_generated_by() {
     let template = &entries[0].template;
     let a = generate_skill_content(template, "1.0.0", None);
     let b = generate_skill_content(template, "1.1.0", None);
-    assert_ne!(a, b, "different versions must produce different frontmatter");
+    assert_ne!(
+        a, b,
+        "different versions must produce different frontmatter"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -390,7 +396,7 @@ fn update_skips_when_generated_by_matches_current_version() {
 
     let entries = get_skill_templates(None);
     let template = &entries[0].template.clone();
-    let content = generate_skill_content(&template, &version, None);
+    let content = generate_skill_content(template, &version, None);
 
     let skill_file = tmp.path().join("SKILL.md");
     std::fs::write(&skill_file, content).unwrap();
@@ -415,7 +421,7 @@ fn update_regenerates_when_generated_by_differs() {
     let tmp = tempfile::tempdir().unwrap();
     let entries = get_skill_templates(None);
     let template = &entries[0].template.clone();
-    let stale = generate_skill_content(&template, "0.0.1", None);
+    let stale = generate_skill_content(template, "0.0.1", None);
 
     let skill_file = tmp.path().join("SKILL.md");
     std::fs::write(&skill_file, stale).unwrap();
@@ -439,22 +445,15 @@ fn update_does_not_touch_unmanaged_skill() {
     use speckit_core::update::skill_needs_update_for_test;
 
     let tmp = tempfile::tempdir().unwrap();
-    let unmanaged = "---\nname: my-custom-skill\ndescription: user wrote this\n---\n\nMy custom skill.\n";
+    let unmanaged =
+        "---\nname: my-custom-skill\ndescription: user wrote this\n---\n\nMy custom skill.\n";
     let skill_file = tmp.path().join("SKILL.md");
     std::fs::write(&skill_file, unmanaged).unwrap();
 
     let version = speckit_generated_by_version();
-    let needs = skill_needs_update_for_test(
-        &skill_file,
-        "speckit-explore",
-        "explore",
-        &version,
-    )
-    .expect("skill_needs_update_for_test");
-    assert!(
-        !needs,
-        "unmanaged skill file must be left alone by update"
-    );
+    let needs = skill_needs_update_for_test(&skill_file, "speckit-explore", "explore", &version)
+        .expect("skill_needs_update_for_test");
+    assert!(!needs, "unmanaged skill file must be left alone by update");
 }
 
 // ---------------------------------------------------------------------------
@@ -478,7 +477,90 @@ fn init_and_update_emit_identical_bytes_for_same_template() {
 }
 
 // ---------------------------------------------------------------------------
-// 12. Tool paths: spec assumes distinct tools have distinct skills_dir values
+// 12. Content parity hashes: SHA-256 of each generated file matches fixture
+// ---------------------------------------------------------------------------
+
+#[test]
+fn generated_content_hash_matches_fixture_for_every_workflow() {
+    // Every skill file, when generated with the baseline version string and
+    // then normalised (strip trailing ws, LF-only), must produce the same
+    // SHA-256 as the corresponding OpenSpec fixture hash (after key substitution:
+    // openspec-*  ->  speckit-*).
+    let entries = get_skill_templates(None);
+    let version =
+        speckit_core::templates::generation::PARITY_BASELINE_VERSION.to_string();
+    for entry in &entries {
+        let content = generate_skill_content(&entry.template, &version, None);
+        let hash = parity_hash(&content);
+        let fixtures = parity_fixture_hashes();
+        let expected = fixtures
+            .get(entry.dir_name.as_str())
+            .unwrap_or_else(|| panic!("no fixture hash for `{}`", entry.dir_name));
+        assert_eq!(
+            hash, *expected,
+            "content hash for `{}` drifted; see P1-2 parity plan",
+            entry.workflow_id
+        );
+    }
+}
+
+#[test]
+fn normalize_for_parity_removes_only_trailing_ws_and_crlf() {
+    // Normalisation must not alter any non-whitespace content.
+    let input = "hello world\nfoo bar\r\n";
+    let out = normalize_for_parity(input);
+    assert_eq!(out, "hello world\nfoo bar");
+    assert!(out.contains(' ')); // interior spaces are preserved
+}
+
+#[test]
+fn normalize_for_parity_handles_empty_string() {
+    let out = normalize_for_parity("");
+    assert_eq!(out, "");
+}
+
+#[test]
+fn normalize_for_parity_handles_only_whitespace() {
+    let out = normalize_for_parity("   \r\n\t  \r\n");
+    assert_eq!(out, "");
+}
+
+#[test]
+fn parity_hash_is_deterministic() {
+    let content = generate_skill_content(
+        &get_skill_templates(None)[0].template,
+        &speckit_generated_by_version(),
+        None,
+    );
+    let a = parity_hash(&content);
+    let b = parity_hash(&content);
+    assert_eq!(a, b, "parity_hash must be deterministic");
+}
+
+#[test]
+fn parity_fixture_hashes_keys_cover_registry() {
+    let fixtures = parity_fixture_hashes();
+    let entries = get_skill_templates(None);
+    for entry in &entries {
+        assert!(
+            fixtures.contains_key(entry.dir_name.as_str()),
+            "registry entry `{}` missing a fixture hash",
+            entry.dir_name
+        );
+    }
+}
+
+#[test]
+fn different_content_produces_different_hash() {
+    let h1 = parity_hash("hello world\n");
+    let h2 = parity_hash("hello world \n"); // trailing space
+    let h3 = parity_hash("hello  world\n"); // extra interior space
+    assert_eq!(h1, h2, "trailing whitespace is normalized");
+    assert_ne!(h1, h3, "interior spaces must change the hash");
+}
+
+// ---------------------------------------------------------------------------
+// 13. Tool paths: spec assumes distinct tools have distinct skills_dir values
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -502,16 +584,21 @@ fn workflow_filter_does_not_mutate_registry() {
         .iter()
         .map(|e| e.workflow_id.clone())
         .collect();
-    assert_eq!(before, after, "calling with a filter must not mutate the default registry");
+    assert_eq!(
+        before, after,
+        "calling with a filter must not mutate the default registry"
+    );
 }
 
 #[test]
 fn every_template_has_required_metadata_fields() {
     let entries = get_skill_templates(None);
     for entry in &entries {
-        let md = entry.template.metadata.as_ref().unwrap_or_else(|| {
-            panic!("template `{}` missing metadata", entry.workflow_id)
-        });
+        let md = entry
+            .template
+            .metadata
+            .as_ref()
+            .unwrap_or_else(|| panic!("template `{}` missing metadata", entry.workflow_id));
         assert_eq!(
             md.get("author").map(|s| s.as_str()),
             Some("speckit"),

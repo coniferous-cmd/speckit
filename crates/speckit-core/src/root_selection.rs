@@ -200,7 +200,7 @@ fn resolve_store_root(
     let registry = read_store_registry_state(&opts).map_err(from_store_error)?;
     let entries = registry
         .as_ref()
-        .map(|r| list_store_registry_entries(r))
+        .map(list_store_registry_entries)
         .unwrap_or_default();
     let entry = entries.iter().find(|e| e.id == id);
 
@@ -465,14 +465,14 @@ fn resolve_nearest_or_declared_root(
     };
 
     // Try to read a store pointer from the config.
-    if let Ok(content) = std::fs::read_to_string(&config_path) {
-        if let Ok(config) = serde_yaml::from_str::<serde_yaml::Value>(&content) {
-            if let Some(store_value) = config.get("store") {
+    if let Ok(content) = std::fs::read_to_string(&config_path)
+        && let Ok(config) = serde_yaml::from_str::<serde_yaml::Value>(&content)
+            && let Some(store_value) = config.get("store") {
                 let store_id = if let Some(s) = store_value.as_str() {
                     s.to_string()
                 } else if let Some(map) = store_value.as_mapping() {
                     // store: { id: "my-store" }
-                    map.get(&serde_yaml::Value::String("id".into()))
+                    map.get(serde_yaml::Value::String("id".into()))
                         .and_then(|v| v.as_str())
                         .unwrap_or("")
                         .to_string()
@@ -489,8 +489,6 @@ fn resolve_nearest_or_declared_root(
                     );
                 }
             }
-        }
-    }
 
     // No store pointer found — treat as a local root.
     Ok(make_root(nearest_root, SpeckitRootSource::Nearest, None))

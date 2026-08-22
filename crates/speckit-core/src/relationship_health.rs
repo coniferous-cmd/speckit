@@ -164,8 +164,8 @@ pub fn inspect_relationships(input: &InspectRelationshipsInput) -> RelationshipH
         ));
     }
 
-    if let Some(ref inert) = input.inert_pointer_declarations {
-        if !inert.fields.is_empty() {
+    if let Some(ref inert) = input.inert_pointer_declarations
+        && !inert.fields.is_empty() {
             status.push(warning(
                 "pointer_declarations_inert",
                 &format!(
@@ -179,14 +179,13 @@ pub fn inspect_relationships(input: &InspectRelationshipsInput) -> RelationshipH
                 ),
             ));
         }
-    }
 
     // Store section
     let store = input.store_facts.as_ref().map(|facts| {
         let mut store_status = Vec::new();
 
-        if let (Some(canonical), Some(origin)) = (&facts.canonical_remote, &facts.origin_url) {
-            if canonical != origin {
+        if let (Some(canonical), Some(origin)) = (&facts.canonical_remote, &facts.origin_url)
+            && canonical != origin {
                 store_status.push(info(
                     "store_remote_divergence",
                     &format!(
@@ -195,10 +194,9 @@ pub fn inspect_relationships(input: &InspectRelationshipsInput) -> RelationshipH
                     ),
                 ));
             }
-        }
 
-        if let Some(ref drift) = facts.drift {
-            if drift.behind > 0 {
+        if let Some(ref drift) = facts.drift
+            && drift.behind > 0 {
                 let behind_commits = format!("commit{}", if drift.behind == 1 { "" } else { "s" });
                 store_status.push(info(
                     "store_checkout_drift",
@@ -209,7 +207,6 @@ pub fn inspect_relationships(input: &InspectRelationshipsInput) -> RelationshipH
                     ),
                 ));
             }
-        }
 
         StoreHealth {
             id: facts.id.clone(),
