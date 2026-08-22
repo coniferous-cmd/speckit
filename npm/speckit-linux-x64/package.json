@@ -1,0 +1,20 @@
+{
+  "name": "@speckit/linux-x64",
+  "version": "1.9.0",
+  "description": "speckit native binary for Linux x64",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Fission-AI/Speckit.git",
+    "directory": "npm/speckit-linux-x64"
+  },
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "files": [
+    "speckit"
+  ]
+}

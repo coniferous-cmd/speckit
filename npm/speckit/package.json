@@ -1,0 +1,36 @@
+{
+  "name": "speckit",
+  "version": "1.9.0",
+  "description": "AI-native system for spec-driven development",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Fission-AI/Speckit.git",
+    "directory": "npm/speckit"
+  },
+  "bin": {
+    "speckit": "./bin/speckit.js"
+  },
+  "scripts": {
+    "postinstall": "node lib/install.js"
+  },
+  "optionalDependencies": {
+    "@speckit/darwin-arm64": "1.9.0",
+    "@speckit/darwin-x64": "1.9.0",
+    "@speckit/linux-x64": "1.9.0",
+    "@speckit/linux-arm64": "1.9.0",
+    "@speckit/win32-x64": "1.9.0"
+  },
+  "engines": {
+    "node": ">=14"
+  },
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ]
+}

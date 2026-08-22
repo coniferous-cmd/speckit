@@ -1,0 +1,20 @@
+{
+  "name": "@speckit/darwin-x64",
+  "version": "1.9.0",
+  "description": "speckit native binary for macOS x64 (Intel)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Fission-AI/Speckit.git",
+    "directory": "npm/speckit-darwin-x64"
+  },
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "files": [
+    "speckit"
+  ]
+}

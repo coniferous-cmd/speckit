@@ -1,0 +1,20 @@
+{
+  "name": "@speckit/darwin-arm64",
+  "version": "1.9.0",
+  "description": "speckit native binary for macOS ARM64 (Apple Silicon)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Fission-AI/Speckit.git",
+    "directory": "npm/speckit-darwin-arm64"
+  },
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "files": [
+    "speckit"
+  ]
+}
