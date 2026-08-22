@@ -330,6 +330,13 @@ enum Commands {
         #[arg(long, hide = true)]
         json: bool,
     },
+
+    /// Internal completion protocol.
+    #[command(name = "__complete", hide = true)]
+    Complete {
+        /// Completion data set (changes, specs, or schemas)
+        completion_type: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -628,13 +635,13 @@ enum StoreCommands {
 enum CompletionCommands {
     /// Generate completion script for a shell (outputs to stdout)
     Generate {
-        /// Shell (bash, zsh, fish)
+        /// Shell (bash, zsh, fish, powershell)
         shell: Option<String>,
     },
 
     /// Install completion script for a shell
     Install {
-        /// Shell (bash, zsh, fish)
+        /// Shell (bash, zsh, fish, powershell)
         shell: Option<String>,
         /// Show detailed installation output
         #[arg(long)]
@@ -643,7 +650,7 @@ enum CompletionCommands {
 
     /// Uninstall completion script for a shell
     Uninstall {
-        /// Shell (bash, zsh, fish)
+        /// Shell (bash, zsh, fish, powershell)
         shell: Option<String>,
         /// Skip confirmation prompts
         #[arg(short = 'y', long = "yes")]
@@ -728,6 +735,79 @@ enum WorksetCommands {
     },
 }
 
+/// Build the same stable command path used by the TypeScript CLI telemetry.
+///
+/// Clap has already parsed the command by this point, but the command enums
+/// intentionally do not derive `Debug`. The raw argv is sufficient here when
+/// restricted to known top-level and nested command names; positional values
+/// such as change names must not become part of the telemetry command name.
+fn telemetry_command_path() -> String {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let top_level = [
+        "init",
+        "experimental",
+        "update",
+        "list",
+        "view",
+        "change",
+        "archive",
+        "spec",
+        "config",
+        "schema",
+        "store",
+        "doctor",
+        "context",
+        "validate",
+        "show",
+        "feedback",
+        "completion",
+        "status",
+        "instructions",
+        "templates",
+        "schemas",
+        "new",
+        "workset",
+    ];
+
+    let Some(top_index) = args
+        .iter()
+        .position(|arg| top_level.contains(&arg.as_str()))
+    else {
+        return "speckit".to_string();
+    };
+
+    let top = args[top_index].as_str();
+    let nested_parents = [
+        "change",
+        "spec",
+        "config",
+        "schema",
+        "store",
+        "completion",
+        "new",
+        "workset",
+    ];
+
+    if !nested_parents.contains(&top) {
+        return format!("speckit:{top}");
+    }
+
+    let nested = args
+        .iter()
+        .skip(top_index + 1)
+        .find(|arg| !arg.starts_with('-'))
+        .map(String::as_str);
+
+    match nested {
+        Some(name) => format!("speckit:{top}:{name}"),
+        None => format!("speckit:{top}"),
+    }
+}
+
+fn telemetry_json_run() -> bool {
+    std::env::args().any(|arg| arg == "--json" || arg == "__complete")
+}
+
 #[tokio::main]
 async fn main() {
     let cli = Cli::parse();
@@ -739,6 +819,15 @@ async fn main() {
             std::env::set_var("NO_COLOR", "1");
         }
     }
+
+    // Match the OpenSpec CLI lifecycle: keep the first-run notice out of
+    // machine-readable output, record the command path, then flush before
+    // returning from main. Telemetry is silent on network/config failures.
+    speckit_telemetry::maybe_show_telemetry_notice(speckit_telemetry::TelemetryNoticeOptions {
+        silent: telemetry_json_run(),
+    })
+    .await;
+    speckit_telemetry::track_command(&telemetry_command_path(), env!("CARGO_PKG_VERSION")).await;
 
     let result = match cli.command {
         Commands::Init {
@@ -1205,6 +1294,10 @@ async fn main() {
             }
         },
 
+        Commands::Complete { completion_type } => {
+            completion::completion_complete(&completion_type).await
+        }
+
         Commands::Status {
             change,
             schema,
@@ -1344,6 +1437,11 @@ async fn main() {
             }
         },
     };
+
+    // Flush for both successful and returned-error command paths before any
+    // process exit. (Commands that explicitly call process::exit internally
+    // retain their existing early-exit behavior.)
+    speckit_telemetry::shutdown().await;
 
     if let Err(e) = result {
         eprintln!("Error: {e}");

@@ -12,6 +12,7 @@ path = "src/main.rs"
 [dependencies]
 speckit-commands = { workspace = true }
 speckit-core = { workspace = true }
+speckit-telemetry = { workspace = true, features = ["telemetry"] }
 clap = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
