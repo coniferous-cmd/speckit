@@ -3,23 +3,19 @@
 //! Determines how each AI tool surfaces Speckit commands: via an adapter-
 //! backed slash-command system, via skill invocation, or not at all.
 
-use std::sync::LazyLock;
-
-/// The delivery mode for Speckit content to AI tools.
+// Compatibility facade. Keep the historical module path, but delegate to the
+// registry-backed implementation so it can never drift from the actual
+// adapter set used by command generation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Delivery {
-    /// Deliver both skills and commands.
     Both,
-    /// Deliver only skills.
     Skills,
-    /// Deliver only commands.
     Commands,
 }
 
 impl Delivery {
-    /// Parses a delivery string from configuration.
-    pub fn from_str(s: &str) -> Option<Self> {
-        match s {
+    pub fn from_str(value: &str) -> Option<Self> {
+        match value {
             "both" => Some(Self::Both),
             "skills" => Some(Self::Skills),
             "commands" => Some(Self::Commands),
@@ -28,92 +24,76 @@ impl Delivery {
     }
 }
 
-/// How the tool spells its Speckit commands.
 #[derive(Debug, Clone)]
 pub struct CommandInvocation {
-    /// The prefix for command names (e.g., "opsx").
     pub prefix: String,
-    /// The separator between prefix and command name (e.g., ":").
     pub separator: String,
 }
 
-/// The capability of a tool's command surface.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CommandSurfaceCapability {
-    /// Tool has an adapter-backed slash-command system.
     AdapterBacked,
-    /// Tool invokes commands through its skill system (e.g., Codex).
     SkillsInvocable,
-    /// Tool has no command surface.
     None,
 }
 
-/// Tool IDs that have adapter-backed command surfaces.
-///
-/// In the full implementation, this would be driven by a registry. Here we
-/// enumerate the known adapter-backed tools.
-static ADAPTER_BACKED_TOOLS: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
-    vec![
-        "claude",
-        "cursor",
-        "cline",
-        "github-copilot",
-        "roocode",
-        "kilocode",
-        "continue",
-        "auggie",
-        "gemini",
-        "qwen",
-        "kiro",
-    ]
-});
+fn to_generation_delivery(delivery: Delivery) -> crate::command_generation::Delivery {
+    match delivery {
+        Delivery::Both => crate::command_generation::Delivery::Both,
+        Delivery::Skills => crate::command_generation::Delivery::Skills,
+        Delivery::Commands => crate::command_generation::Delivery::Commands,
+    }
+}
 
-/// Resolves the command invocation syntax for a tool.
 pub fn resolve_command_invocation(tool_id: &str) -> Option<CommandInvocation> {
-    if ADAPTER_BACKED_TOOLS.contains(&tool_id) {
-        Some(CommandInvocation {
+    crate::command_generation::resolve_command_invocation(tool_id).map(|invocation| {
+        CommandInvocation {
+            // The legacy facade exposes the logical namespace (`opsx`), not
+            // the tool-specific literal prefix (`/`, `@`, ...).
             prefix: "opsx".to_string(),
-            separator: ":".to_string(),
-        })
-    } else {
-        None
-    }
+            separator: match invocation.style {
+                crate::command_generation::CommandInvocationStyle::Namespaced => ":".to_string(),
+                crate::command_generation::CommandInvocationStyle::Flat => "-".to_string(),
+            },
+        }
+    })
 }
 
-/// Resolves the command surface capability for a tool.
 pub fn resolve_command_surface_capability(tool_id: &str) -> CommandSurfaceCapability {
-    if ADAPTER_BACKED_TOOLS.contains(&tool_id) {
-        CommandSurfaceCapability::AdapterBacked
-    } else if tool_id == "codex" {
-        CommandSurfaceCapability::SkillsInvocable
-    } else {
-        CommandSurfaceCapability::None
+    match crate::command_generation::resolve_command_surface_capability(tool_id) {
+        crate::command_generation::CommandSurfaceCapability::AdapterBacked => {
+            CommandSurfaceCapability::AdapterBacked
+        }
+        crate::command_generation::CommandSurfaceCapability::SkillsInvocable => {
+            CommandSurfaceCapability::SkillsInvocable
+        }
+        crate::command_generation::CommandSurfaceCapability::None => CommandSurfaceCapability::None,
     }
 }
 
-/// Whether skills should be generated for a tool given the delivery mode.
 pub fn should_generate_skills_for_tool(tool_id: &str, delivery: Delivery) -> bool {
-    delivery != Delivery::Commands
-        || resolve_command_surface_capability(tool_id) == CommandSurfaceCapability::SkillsInvocable
+    crate::command_generation::should_generate_skills_for_tool(
+        tool_id,
+        to_generation_delivery(delivery),
+    )
 }
-
-/// Whether skills should be removed for a tool given the delivery mode.
 pub fn should_remove_skills_for_tool(tool_id: &str, delivery: Delivery) -> bool {
-    delivery == Delivery::Commands
-        && resolve_command_surface_capability(tool_id) != CommandSurfaceCapability::SkillsInvocable
+    crate::command_generation::should_remove_skills_for_tool(
+        tool_id,
+        to_generation_delivery(delivery),
+    )
 }
-
-/// Whether commands should be generated for a tool given the delivery mode.
 pub fn should_generate_commands_for_tool(tool_id: &str, delivery: Delivery) -> bool {
-    delivery != Delivery::Skills
-        && resolve_command_surface_capability(tool_id) == CommandSurfaceCapability::AdapterBacked
+    crate::command_generation::should_generate_commands_for_tool(
+        tool_id,
+        to_generation_delivery(delivery),
+    )
 }
-
-/// Whether command files should be reconciled (removed) for a tool given
-/// the delivery mode.
 pub fn should_reconcile_command_files_for_tool(tool_id: &str, delivery: Delivery) -> bool {
-    delivery == Delivery::Skills
-        && resolve_command_surface_capability(tool_id) == CommandSurfaceCapability::AdapterBacked
+    crate::command_generation::should_reconcile_command_files_for_tool(
+        tool_id,
+        to_generation_delivery(delivery),
+    )
 }
 
 #[cfg(test)]
@@ -126,6 +106,16 @@ mod tests {
             resolve_command_surface_capability("claude"),
             CommandSurfaceCapability::AdapterBacked
         );
+    }
+
+    #[test]
+    fn every_registered_adapter_is_adapter_backed() {
+        for adapter in crate::command_generation::CommandAdapterRegistry::global().get_all() {
+            assert_eq!(
+                resolve_command_surface_capability(adapter.tool_id()),
+                CommandSurfaceCapability::AdapterBacked
+            );
+        }
     }
 
     #[test]

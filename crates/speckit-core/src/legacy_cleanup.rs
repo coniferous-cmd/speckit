@@ -83,9 +83,10 @@ pub struct CleanupResult {
 /// Resolve the Codex global prompts directory.
 pub fn get_codex_prompt_dir() -> PathBuf {
     if let Ok(env_home) = std::env::var("CODEX_HOME")
-        && !env_home.trim().is_empty() {
-            return PathBuf::from(env_home.trim()).join("prompts");
-        }
+        && !env_home.trim().is_empty()
+    {
+        return PathBuf::from(env_home.trim()).join("prompts");
+    }
     dirs::home_dir()
         .unwrap_or_else(|| PathBuf::from("."))
         .join(".codex")
@@ -153,10 +154,11 @@ pub fn detect_legacy_artifacts(project_path: &Path) -> Result<LegacyDetectionRes
         let file_path = project_path.join(file_name);
         if file_path.exists()
             && let Ok(content) = fs::read_to_string(&file_path)
-                && has_speckit_markers(&content) {
-                    result.config_files.push(file_name.to_string());
-                    result.config_files_to_update.push(file_name.to_string());
-                }
+            && has_speckit_markers(&content)
+        {
+            result.config_files.push(file_name.to_string());
+            result.config_files_to_update.push(file_name.to_string());
+        }
     }
 
     // Detect legacy slash command directories
@@ -223,24 +225,25 @@ pub fn detect_legacy_artifacts(project_path: &Path) -> Result<LegacyDetectionRes
     ];
 
     if codex_prompts_dir.is_dir()
-        && let Ok(entries) = fs::read_dir(&codex_prompts_dir) {
-            for entry in entries.flatten() {
-                let name = entry.file_name().to_string_lossy().to_string();
-                if managed_codex_files.contains(&name.as_str()) {
-                    let full_path = entry.path().to_string_lossy().to_string();
-                    result.global_slash_command_files.push(full_path.clone());
-                    result
-                        .global_slash_command_details
-                        .push(LegacyGlobalPromptMatch {
-                            path: full_path,
-                            tool_id: "codex".to_string(),
-                            managed_file_name: name,
-                            workflow_ids: Vec::new(),
-                            replacement_label: Some("Codex skills".to_string()),
-                        });
-                }
+        && let Ok(entries) = fs::read_dir(&codex_prompts_dir)
+    {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            if managed_codex_files.contains(&name.as_str()) {
+                let full_path = entry.path().to_string_lossy().to_string();
+                result.global_slash_command_files.push(full_path.clone());
+                result
+                    .global_slash_command_details
+                    .push(LegacyGlobalPromptMatch {
+                        path: full_path,
+                        tool_id: "codex".to_string(),
+                        managed_file_name: name,
+                        workflow_ids: Vec::new(),
+                        replacement_label: Some("Codex skills".to_string()),
+                    });
             }
         }
+    }
 
     // Detect legacy structure files
     result.has_speckit_agents = project_path.join("speckit/AGENTS.md").exists();
@@ -248,9 +251,10 @@ pub fn detect_legacy_artifacts(project_path: &Path) -> Result<LegacyDetectionRes
 
     let root_agents = project_path.join("AGENTS.md");
     if root_agents.exists()
-        && let Ok(content) = fs::read_to_string(&root_agents) {
-            result.has_root_agents_with_markers = has_speckit_markers(&content);
-        }
+        && let Ok(content) = fs::read_to_string(&root_agents)
+    {
+        result.has_root_agents_with_markers = has_speckit_markers(&content);
+    }
 
     result.has_legacy_artifacts = !result.config_files.is_empty()
         || !result.slash_command_dirs.is_empty()

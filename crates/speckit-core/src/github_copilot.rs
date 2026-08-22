@@ -253,16 +253,17 @@ pub fn has_existing_managed_cloud_files(project_path: &Path) -> bool {
 
     for full_path in &paths {
         if full_path.exists()
-            && let Ok(content) = fs::read_to_string(full_path) {
-                let rel_path = full_path
-                    .strip_prefix(project_path)
-                    .unwrap_or(full_path)
-                    .to_string_lossy()
-                    .to_string();
-                if is_managed_copilot_cloud_file(&rel_path, &content) {
-                    return true;
-                }
+            && let Ok(content) = fs::read_to_string(full_path)
+        {
+            let rel_path = full_path
+                .strip_prefix(project_path)
+                .unwrap_or(full_path)
+                .to_string_lossy()
+                .to_string();
+            if is_managed_copilot_cloud_file(&rel_path, &content) {
+                return true;
             }
+        }
     }
     false
 }
@@ -316,9 +317,10 @@ pub fn find_unmanaged_cloud_files(project_path: &Path) -> Vec<String> {
         let full_path = project_path.join(rel_path);
         if full_path.exists()
             && let Ok(content) = fs::read_to_string(&full_path)
-                && !is_managed_copilot_cloud_file(rel_path, &content) {
-                    collisions.push(rel_path.to_string());
-                }
+            && !is_managed_copilot_cloud_file(rel_path, &content)
+        {
+            collisions.push(rel_path.to_string());
+        }
     }
     collisions
 }
@@ -332,9 +334,10 @@ pub fn list_managed_cloud_files(project_path: &Path) -> Vec<String> {
         let full_path = project_path.join(rel_path);
         if full_path.exists()
             && let Ok(content) = fs::read_to_string(&full_path)
-                && is_managed_copilot_cloud_file(rel_path, &content) {
-                    present.push(rel_path.to_string());
-                }
+            && is_managed_copilot_cloud_file(rel_path, &content)
+        {
+            present.push(rel_path.to_string());
+        }
     }
     present
 }

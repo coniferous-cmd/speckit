@@ -24,9 +24,10 @@ pub fn discover_items(base_dir: &Path, item_type: &str) -> Result<Vec<String>> {
         let path = entry.path();
 
         if path.is_dir()
-            && let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                items.push(name.to_string());
-            }
+            && let Some(name) = path.file_name().and_then(|n| n.to_str())
+        {
+            items.push(name.to_string());
+        }
     }
 
     items.sort();

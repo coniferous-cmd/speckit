@@ -31,15 +31,17 @@ static CI_DISABLED_VALUES: &[&str] = &["", "false", "0", "no", "off"];
 pub fn is_telemetry_enabled() -> bool {
     // Check explicit opt-out.
     if let Ok(val) = std::env::var("SPECKIT_TELEMETRY")
-        && val == "0" {
-            return false;
-        }
+        && val == "0"
+    {
+        return false;
+    }
 
     // Respect DO_NOT_TRACK standard.
     if let Ok(val) = std::env::var("DO_NOT_TRACK")
-        && val == "1" {
-            return false;
-        }
+        && val == "1"
+    {
+        return false;
+    }
 
     // Auto-disable in CI environments.
     if is_ci_environment() {

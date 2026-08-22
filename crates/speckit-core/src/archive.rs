@@ -114,8 +114,8 @@ impl ArchiveCommand {
         let metadata = change_metadata::read_change_metadata(&change_dir)?;
         let effective_skip_specs =
             options.skip_specs || metadata.as_ref().map_or(false, |m| m.skip_specs);
-        let retire_declared = change_metadata::read_retire_capabilities_marker(&change_dir)
-            .unwrap_or(false);
+        let retire_declared =
+            change_metadata::read_retire_capabilities_marker(&change_dir).unwrap_or(false);
 
         let specs_dir = speckit_dir.join("specs");
 
@@ -145,14 +145,15 @@ impl ArchiveCommand {
                 // ── 6. Apply spec deltas ────────────────────────────────────
                 // P0-7: spec apply failure does NOT move the change.
                 for update in &updates {
-                    let result = specs_apply::build_updated_spec(update, &change_name, options.json)
-                        .map_err(|e| {
-                            anyhow::anyhow!(
-                                "Failed to build spec update for {}: {}",
-                                update.id,
-                                e
-                            )
-                        })?;
+                    let result =
+                        specs_apply::build_updated_spec(update, &change_name, options.json)
+                            .map_err(|e| {
+                                anyhow::anyhow!(
+                                    "Failed to build spec update for {}: {}",
+                                    update.id,
+                                    e
+                                )
+                            })?;
 
                     let outcome = Self::decide_spec_outcome(
                         update,
@@ -196,7 +197,8 @@ impl ArchiveCommand {
                                     // Spec failure → block archive, change stays.
                                     return Err(anyhow::anyhow!(
                                         "Failed to retire {}: {}. Aborted — change was not moved.",
-                                        update.id, e
+                                        update.id,
+                                        e
                                     ));
                                 }
                             }
@@ -219,7 +221,8 @@ impl ArchiveCommand {
                                 // Spec failure → block archive, change stays.
                                 return Err(anyhow::anyhow!(
                                     "Failed to write {}: {}. Aborted — change was not moved.",
-                                    update.id, e
+                                    update.id,
+                                    e
                                 ));
                             }
                         }
@@ -262,7 +265,9 @@ impl ArchiveCommand {
 
         // Move change to archive; copy+remove fallback for cross-device.
         if let Err(e) = fs::rename(&change_dir, &archive_path) {
-            if e.raw_os_error().map_or(false, |code| code == 18 || code == 1) {
+            if e.raw_os_error()
+                .map_or(false, |code| code == 18 || code == 1)
+            {
                 copy_dir_recursive(&change_dir, &archive_path)?;
                 fs::remove_dir_all(&change_dir)?;
             } else {
@@ -279,15 +284,8 @@ impl ArchiveCommand {
         drop(_lock);
 
         if !options.json {
-            println!(
-                "Change '{}' archived as '{}'.",
-                change_name, archive_name
-            );
-            if totals.added > 0
-                || totals.modified > 0
-                || totals.removed > 0
-                || totals.renamed > 0
-            {
+            println!("Change '{}' archived as '{}'.", change_name, archive_name);
+            if totals.added > 0 || totals.modified > 0 || totals.removed > 0 || totals.renamed > 0 {
                 println!(
                     "Specs updated: +{} ~{} -{} ->{}",
                     totals.added, totals.modified, totals.removed, totals.renamed
@@ -295,8 +293,7 @@ impl ArchiveCommand {
             }
         }
 
-        let specs_updated =
-            totals.added + totals.modified + totals.removed + totals.renamed > 0;
+        let specs_updated = totals.added + totals.modified + totals.removed + totals.renamed > 0;
 
         Ok(Some(ArchiveResult {
             change: change_name,
@@ -304,7 +301,11 @@ impl ArchiveCommand {
             path: archive_path.to_string_lossy().to_string(),
             specs_updated,
             totals: if specs_updated { Some(totals) } else { None },
-            warnings: if warnings.is_empty() { None } else { Some(warnings) },
+            warnings: if warnings.is_empty() {
+                None
+            } else {
+                Some(warnings)
+            },
         }))
     }
 
@@ -395,10 +396,7 @@ impl ArchiveCommand {
     }
 
     /// Preview spec updates before applying.
-    fn preview_spec_updates(
-        updates: &[specs_apply::SpecUpdate],
-        _change_name: &str,
-    ) -> Result<()> {
+    fn preview_spec_updates(updates: &[specs_apply::SpecUpdate], _change_name: &str) -> Result<()> {
         println!("The following spec changes will be applied:");
         println!();
         for update in updates {
@@ -542,23 +540,15 @@ mod tests {
         let changes = tmp.path().join("speckit").join("changes");
         let change_dir = changes.join("my-change");
         fs::create_dir_all(&change_dir).unwrap();
-        fs::write(
-            change_dir.join("tasks.md"),
-            "- [x] Done\n- [ ] Not done\n",
-        )
-        .unwrap();
+        fs::write(change_dir.join("tasks.md"), "- [x] Done\n- [ ] Not done\n").unwrap();
 
         let opts = ArchiveOptions {
             no_validate: false,
             ..Default::default()
         };
-        let result =
-            ArchiveCommand::execute(Some("my-change"), &opts, tmp.path());
+        let result = ArchiveCommand::execute(Some("my-change"), &opts, tmp.path());
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("incomplete tasks"));
+        assert!(result.unwrap_err().to_string().contains("incomplete tasks"));
     }
 
     #[test]
@@ -567,19 +557,14 @@ mod tests {
         let changes = tmp.path().join("speckit").join("changes");
         let change_dir = changes.join("my-change");
         fs::create_dir_all(&change_dir).unwrap();
-        fs::write(
-            change_dir.join("tasks.md"),
-            "- [x] Done\n- [ ] Not done\n",
-        )
-        .unwrap();
+        fs::write(change_dir.join("tasks.md"), "- [x] Done\n- [ ] Not done\n").unwrap();
 
         let opts = ArchiveOptions {
             no_validate: true,
             yes: true,
             ..Default::default()
         };
-        let result =
-            ArchiveCommand::execute(Some("my-change"), &opts, tmp.path());
+        let result = ArchiveCommand::execute(Some("my-change"), &opts, tmp.path());
         assert!(result.is_ok());
     }
 
@@ -592,10 +577,7 @@ mod tests {
         };
         let result = ArchiveCommand::execute(None, &opts, tmp.path());
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("non-interactive"));
+        assert!(result.unwrap_err().to_string().contains("non-interactive"));
     }
 
     #[test]
@@ -639,13 +621,9 @@ mod tests {
             yes: true,
             ..Default::default()
         };
-        let result =
-            ArchiveCommand::execute(Some("my-change"), &opts, tmp.path());
+        let result = ArchiveCommand::execute(Some("my-change"), &opts, tmp.path());
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("already exists"));
+        assert!(result.unwrap_err().to_string().contains("already exists"));
     }
 
     #[test]
@@ -816,8 +794,7 @@ mod tests {
             yes: true,
             ..Default::default()
         };
-        let result =
-            ArchiveCommand::execute(Some("remove-no-marker"), &opts, tmp.path());
+        let result = ArchiveCommand::execute(Some("remove-no-marker"), &opts, tmp.path());
 
         // Without the marker, buildUpdatedSpec produces a spec with no requirements,
         // which the caller treats as a retirement-candidate (if retire_declared=true)
@@ -874,8 +851,7 @@ mod tests {
             yes: true,
             ..Default::default()
         };
-        let result =
-            ArchiveCommand::execute(Some("bad-metadata"), &opts, tmp.path());
+        let result = ArchiveCommand::execute(Some("bad-metadata"), &opts, tmp.path());
 
         assert!(result.is_err());
         assert!(change_dir.exists());
@@ -906,8 +882,7 @@ mod tests {
             json: false,
             ..Default::default()
         };
-        let result =
-            ArchiveCommand::execute(Some("preview-change"), &opts, tmp.path());
+        let result = ArchiveCommand::execute(Some("preview-change"), &opts, tmp.path());
         // Without a "y" in stdin, confirm_archive returns false → cancelled.
         assert!(result.is_ok());
         assert!(result.as_ref().unwrap().is_none());

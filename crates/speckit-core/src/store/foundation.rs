@@ -471,22 +471,24 @@ pub fn resolve_git_store_backend_config(
     }
 
     if let Some(ref remote) = input.remote
-        && remote.is_empty() {
-            return Err(StoreError::new(
-                "Store backend remote must not be empty when provided.",
-                "store_remote_empty",
-                StoreErrorOptions::default(),
-            ));
-        }
+        && remote.is_empty()
+    {
+        return Err(StoreError::new(
+            "Store backend remote must not be empty when provided.",
+            "store_remote_empty",
+            StoreErrorOptions::default(),
+        ));
+    }
 
     if let Some(ref branch) = input.branch
-        && branch.is_empty() {
-            return Err(StoreError::new(
-                "Store branch must not be empty when provided.",
-                "store_branch_empty",
-                StoreErrorOptions::default(),
-            ));
-        }
+        && branch.is_empty()
+    {
+        return Err(StoreError::new(
+            "Store branch must not be empty when provided.",
+            "store_branch_empty",
+            StoreErrorOptions::default(),
+        ));
+    }
 
     Ok(StoreGitBackendConfig {
         backend_type: "git".into(),

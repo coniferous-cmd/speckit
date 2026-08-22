@@ -204,12 +204,13 @@ pub fn get_transformer_for_tool(
     }
 
     if let Some(inv) = invocation
-        && inv.needs_rewrite() {
-            let inv = inv.clone();
-            return Some(Box::new(move |text: &str| {
-                transform_command_invocations(text, &inv)
-            }));
-        }
+        && inv.needs_rewrite()
+    {
+        let inv = inv.clone();
+        return Some(Box::new(move |text: &str| {
+            transform_command_invocations(text, &inv)
+        }));
+    }
 
     None
 }

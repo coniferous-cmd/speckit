@@ -25,8 +25,7 @@ use crate::utils::task_progress::{TaskProgress, format_task_status, get_task_pro
 // ---------------------------------------------------------------------------
 
 /// Sort order for list output.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ListSort {
     /// Most-recently modified first (default).
     #[default]
@@ -35,16 +34,13 @@ pub enum ListSort {
     Name,
 }
 
-
 /// Mode selector: list changes or specs.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ListMode {
     #[default]
     Changes,
     Specs,
 }
-
 
 /// Options controlling list behaviour.
 #[derive(Debug, Clone, Default)]

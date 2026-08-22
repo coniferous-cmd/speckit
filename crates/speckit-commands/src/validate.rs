@@ -3,10 +3,11 @@
 //! Validate changes and specs.
 
 use std::path::Path;
+use tokio::task::JoinSet;
 
 use serde::{Deserialize, Serialize};
 
-use crate::shared_output::StoreDiagnostic;
+use speckit_core::validation::{ValidationLevel, ValidationReport, Validator};
 
 /// Options for the top-level validate command.
 #[derive(Debug, Clone)]
@@ -310,6 +311,7 @@ async fn run_bulk_validation(
     json: bool,
     concurrency: Option<&str>,
 ) -> anyhow::Result<()> {
+    let concurrency = resolve_concurrency(concurrency)?;
     let changes = if validate_changes {
         crate::change::get_active_change_ids(project_root).await?
     } else {
@@ -343,38 +345,60 @@ async fn run_bulk_validation(
     }
 
     let mut results: Vec<BulkItemResult> = Vec::new();
+    let mut jobs = JoinSet::new();
 
-    for id in &changes {
-        let start = std::time::Instant::now();
-        let change_dir = Path::new(project_root)
-            .join("speckit")
-            .join("changes")
-            .join(id);
-        let (valid, issues) = validate_change_dir(&change_dir, strict).await;
-        results.push(BulkItemResult {
-            id: id.clone(),
-            item_type: "change".to_string(),
-            valid,
-            issues,
-            duration_ms: start.elapsed().as_millis() as u64,
+    for id in changes {
+        let root = project_root.to_string();
+        jobs.spawn(async move {
+            let start = std::time::Instant::now();
+            let change_dir = Path::new(&root).join("speckit").join("changes").join(&id);
+            let (valid, issues) = validate_change_dir(&change_dir, strict).await;
+            BulkItemResult {
+                id,
+                item_type: "change".to_string(),
+                valid,
+                issues,
+                duration_ms: start.elapsed().as_millis() as u64,
+            }
         });
+        if jobs.len() >= concurrency {
+            results.push(
+                jobs.join_next()
+                    .await
+                    .ok_or_else(|| anyhow::anyhow!("validation worker exited unexpectedly"))??,
+            );
+        }
     }
 
-    for id in &specs {
-        let start = std::time::Instant::now();
-        let spec_file = Path::new(project_root)
-            .join("speckit")
-            .join("specs")
-            .join(id)
-            .join("spec.md");
-        let (valid, issues) = validate_spec_file(&spec_file, strict).await;
-        results.push(BulkItemResult {
-            id: id.clone(),
-            item_type: "spec".to_string(),
-            valid,
-            issues,
-            duration_ms: start.elapsed().as_millis() as u64,
+    for id in specs {
+        let root = project_root.to_string();
+        jobs.spawn(async move {
+            let start = std::time::Instant::now();
+            let spec_file = Path::new(&root)
+                .join("speckit")
+                .join("specs")
+                .join(&id)
+                .join("spec.md");
+            let (valid, issues) = validate_spec_file(&spec_file, strict).await;
+            BulkItemResult {
+                id,
+                item_type: "spec".to_string(),
+                valid,
+                issues,
+                duration_ms: start.elapsed().as_millis() as u64,
+            }
         });
+        if jobs.len() >= concurrency {
+            results.push(
+                jobs.join_next()
+                    .await
+                    .ok_or_else(|| anyhow::anyhow!("validation worker exited unexpectedly"))??,
+            );
+        }
+    }
+
+    while let Some(result) = jobs.join_next().await {
+        results.push(result?);
     }
 
     results.sort_by(|a, b| a.id.cmp(&b.id));
@@ -421,6 +445,21 @@ async fn run_bulk_validation(
     }
 
     Ok(())
+}
+
+fn resolve_concurrency(value: Option<&str>) -> anyhow::Result<usize> {
+    let raw = value
+        .map(str::to_owned)
+        .or_else(|| std::env::var("SPECKIT_CONCURRENCY").ok())
+        .or_else(|| std::env::var("OPENSPEC_CONCURRENCY").ok())
+        .unwrap_or_else(|| "6".to_string());
+    let parsed = raw
+        .parse::<usize>()
+        .map_err(|_| anyhow::anyhow!("Invalid concurrency '{raw}'; expected a positive integer"))?;
+    if parsed == 0 {
+        anyhow::bail!("Concurrency must be a positive integer");
+    }
+    Ok(parsed)
 }
 
 /// Run archived task validation.
@@ -557,7 +596,7 @@ async fn run_archived_task_validation(project_root: &str, json: bool) -> anyhow:
 }
 
 /// Validate a change directory.
-async fn validate_change_dir(change_dir: &Path, _strict: bool) -> (bool, Vec<ValidationIssue>) {
+async fn validate_change_dir(change_dir: &Path, strict: bool) -> (bool, Vec<ValidationIssue>) {
     let mut issues = Vec::new();
 
     if !change_dir.is_dir() {
@@ -576,6 +615,11 @@ async fn validate_change_dir(change_dir: &Path, _strict: bool) -> (bool, Vec<Val
             path: "proposal.md".to_string(),
             message: "proposal.md not found".to_string(),
         });
+    } else {
+        append_core_report(
+            &mut issues,
+            Validator::new(strict).validate_change(&proposal),
+        );
     }
 
     let specs_dir = change_dir.join("specs");
@@ -587,7 +631,14 @@ async fn validate_change_dir(change_dir: &Path, _strict: bool) -> (bool, Vec<Val
         });
     }
 
-    (!issues.iter().any(|i| i.level == "ERROR"), issues)
+    let valid = if strict {
+        !issues
+            .iter()
+            .any(|i| i.level == "ERROR" || i.level == "WARNING")
+    } else {
+        !issues.iter().any(|i| i.level == "ERROR")
+    };
+    (valid, issues)
 }
 
 /// Validate a spec file.
@@ -603,18 +654,40 @@ async fn validate_spec_file(spec_file: &Path, strict: bool) -> (bool, Vec<Valida
         return (false, issues);
     }
 
-    if let Ok(content) = tokio::fs::read_to_string(spec_file).await {
-        let has_requirements = content.lines().any(|l| l.trim().starts_with("### "));
-        if !has_requirements {
-            issues.push(ValidationIssue {
-                level: "ERROR".to_string(),
-                path: "spec.md".to_string(),
-                message: "No requirements found. Use ### Requirement: headers.".to_string(),
-            });
-        }
-    }
+    append_core_report(&mut issues, Validator::new(strict).validate_spec(spec_file));
 
-    (!issues.iter().any(|i| i.level == "ERROR"), issues)
+    let valid = if strict {
+        !issues
+            .iter()
+            .any(|i| i.level == "ERROR" || i.level == "WARNING")
+    } else {
+        !issues.iter().any(|i| i.level == "ERROR")
+    };
+    (valid, issues)
+}
+
+fn append_core_report(issues: &mut Vec<ValidationIssue>, report: anyhow::Result<ValidationReport>) {
+    match report {
+        Ok(report) => {
+            issues.extend(report.issues.into_iter().map(|issue| {
+                ValidationIssue {
+                    level: match issue.level {
+                        ValidationLevel::Error => "ERROR",
+                        ValidationLevel::Warning => "WARNING",
+                        ValidationLevel::Info => "INFO",
+                    }
+                    .to_string(),
+                    path: issue.path,
+                    message: issue.message,
+                }
+            }));
+        }
+        Err(error) => issues.push(ValidationIssue {
+            level: "ERROR".to_string(),
+            path: "file".to_string(),
+            message: error.to_string(),
+        }),
+    }
 }
 
 /// Print next-step hints.

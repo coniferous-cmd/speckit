@@ -3,7 +3,7 @@
 //! inspection. Doctor layers its health-only inputs (store facts,
 //! wrong-turn detection) on top.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -38,9 +38,12 @@ pub struct ProjectConfig {
 /// A reference declaration in the project config.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReferenceDeclaration {
+    #[serde(alias = "id")]
     pub store_id: String,
     #[serde(default)]
     pub path: Option<String>,
+    #[serde(default)]
+    pub remote: Option<String>,
 }
 
 /// An entry in the assembled reference index (resolved from declarations + registry).
@@ -48,8 +51,18 @@ pub struct ReferenceDeclaration {
 pub struct ReferenceIndexEntry {
     pub store_id: String,
     pub root: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub specs: Option<Vec<ReferenceSpecEntry>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fetch: Option<String>,
     #[serde(default)]
     pub status: Vec<StoreDiagnostic>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReferenceSpecEntry {
+    pub id: String,
+    pub summary: String,
 }
 
 /// Inspection result of an Speckit root directory.
@@ -72,25 +85,23 @@ pub struct RelationshipData {
 /// Read the store registry file. Returns a snapshot with entries and
 /// an unreadable flag if the file cannot be parsed.
 pub async fn read_registry_snapshot() -> RegistrySnapshot {
-    // Locate the registry file: ~/.config/speckit/store-registry.json (XDG-aware)
-    let registry_path = dirs::config_dir()
-        .map(|p| p.join("speckit").join("store-registry.json"))
-        .unwrap_or_else(|| PathBuf::from(".speckit/store-registry.json"));
-
-    let content = match tokio::fs::read_to_string(&registry_path).await {
-        Ok(c) => c,
-        Err(_) => {
-            return RegistrySnapshot {
-                entries: Vec::new(),
-                unreadable: true,
-            };
-        }
-    };
-
-    let entries: Vec<RegistryEntry> = serde_json::from_str(&content).unwrap_or_default();
+    // Use the same XDG-aware YAML registry reader as store/root resolution.
+    // The previous implementation read a legacy JSON path, which meant
+    // context/doctor silently saw an empty registry in normal installations.
+    let snapshot = speckit_core::store::registry::read_registry_snapshot(None);
     RegistrySnapshot {
-        entries,
-        unreadable: false,
+        entries: snapshot
+            .entries
+            .unwrap_or_default()
+            .into_iter()
+            .map(|entry| RegistryEntry {
+                id: entry.id,
+                root: speckit_core::store::registry::get_store_root(&entry.backend)
+                    .to_string_lossy()
+                    .to_string(),
+            })
+            .collect(),
+        unreadable: snapshot.unreadable,
     }
 }
 
@@ -123,34 +134,130 @@ pub async fn assemble_reference_index(
 ) -> Vec<ReferenceIndexEntry> {
     let mut entries = Vec::new();
     for decl in references {
-        // Skip self-references
-        if let Some(reg_entry) = registry_entries.iter().find(|e| e.id == decl.store_id) {
-            // If the resolved root is the same as this project root, omit it
-            if reg_entry.root == project_root {
-                continue;
-            }
+        if !speckit_core::id::is_kebab_id(&decl.store_id) {
             entries.push(ReferenceIndexEntry {
                 store_id: decl.store_id.clone(),
-                root: Some(reg_entry.root.clone()),
-                status: Vec::new(),
+                root: None,
+                specs: None,
+                fetch: None,
+                status: vec![warning(
+                    "reference_invalid_id",
+                    format!("Reference '{}' is not a valid store id.", decl.store_id),
+                    "Use kebab-case store ids in the references list.",
+                )],
             });
-        } else {
+            continue;
+        }
+
+        let Some(reg_entry) = registry_entries.iter().find(|e| e.id == decl.store_id) else {
             entries.push(ReferenceIndexEntry {
                 store_id: decl.store_id.clone(),
-                root: decl.path.clone(),
-                status: vec![StoreDiagnostic {
-                    severity: "warning".to_string(),
-                    code: "reference_not_registered".to_string(),
-                    message: format!("Store '{}' is not registered", decl.store_id),
-                    fix: Some(format!(
-                        "speckit store register <path> --id {}",
+                root: None,
+                specs: None,
+                fetch: Some(format!(
+                    "speckit show <spec-id> --type spec --store {}",
+                    decl.store_id
+                )),
+                status: vec![warning(
+                    "reference_unresolved",
+                    format!(
+                        "Referenced store '{}' is not registered on this machine.",
                         decl.store_id
-                    )),
-                }],
+                    ),
+                    &format!(
+                        "Get a checkout and run: speckit store register <path> --id {}",
+                        decl.store_id
+                    ),
+                )],
+            });
+            continue;
+        };
+
+        let root = std::fs::canonicalize(&reg_entry.root)
+            .unwrap_or_else(|_| PathBuf::from(&reg_entry.root));
+        let project =
+            std::fs::canonicalize(project_root).unwrap_or_else(|_| PathBuf::from(project_root));
+        if root == project {
+            continue;
+        }
+        if !root.join("speckit").is_dir() {
+            entries.push(ReferenceIndexEntry {
+                store_id: decl.store_id.clone(),
+                root: None,
+                specs: None,
+                fetch: None,
+                status: vec![warning(
+                    "reference_root_unhealthy",
+                    format!(
+                        "Referenced store '{}' is registered but has no usable speckit/ root.",
+                        decl.store_id
+                    ),
+                    &format!("Run: speckit store doctor {}", decl.store_id),
+                )],
+            });
+            continue;
+        }
+
+        let specs = collect_reference_specs(&root);
+        entries.push(ReferenceIndexEntry {
+            store_id: decl.store_id.clone(),
+            root: Some(root.to_string_lossy().to_string()),
+            specs: Some(specs),
+            fetch: Some(format!(
+                "speckit show <spec-id> --type spec --store {}",
+                decl.store_id
+            )),
+            status: Vec::new(),
+        });
+    }
+    entries
+}
+
+fn warning(code: &str, message: String, fix: &str) -> StoreDiagnostic {
+    StoreDiagnostic {
+        severity: "warning".to_string(),
+        code: code.to_string(),
+        message,
+        fix: Some(fix.to_string()),
+    }
+}
+
+fn collect_reference_specs(root: &Path) -> Vec<ReferenceSpecEntry> {
+    let specs_root = root.join("speckit").join("specs");
+    if !specs_root.is_dir() {
+        return Vec::new();
+    }
+    let mut result = Vec::new();
+    collect_spec_files(&specs_root, &specs_root, &mut result);
+    result.sort_by(|a, b| a.id.cmp(&b.id));
+    result
+}
+
+fn collect_spec_files(root: &Path, current: &Path, result: &mut Vec<ReferenceSpecEntry>) {
+    let Ok(entries) = std::fs::read_dir(current) else {
+        return;
+    };
+    for entry in entries.filter_map(Result::ok) {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_spec_files(root, &path, result);
+        } else if path.file_name().is_some_and(|name| name == "spec.md") {
+            let Ok(relative) = path.strip_prefix(root) else {
+                continue;
+            };
+            let Some(parent) = relative.parent() else {
+                continue;
+            };
+            let id = parent
+                .to_string_lossy()
+                .replace(std::path::MAIN_SEPARATOR, "/");
+            let content = std::fs::read_to_string(&path).unwrap_or_default();
+            result.push(ReferenceSpecEntry {
+                id,
+                summary: speckit_core::references::extract_first_purpose_line(&content),
             });
         }
     }
-    entries
 }
 
 /// Inspect an Speckit root: check for project.md, specs/, changes/, etc.

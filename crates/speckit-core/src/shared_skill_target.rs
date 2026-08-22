@@ -115,10 +115,11 @@ pub fn reconcile_shared_skill_targets(
 
         // Check for explicit marker
         if let Some(marked) = read_shared_skill_target(project_path, root)
-            && let Some(marked_tool) = group.iter().find(|t| t.value == marked) {
-                reconciled.push((*marked_tool).clone());
-                continue;
-            }
+            && let Some(marked_tool) = group.iter().find(|t| t.value == marked)
+        {
+            reconciled.push((*marked_tool).clone());
+            continue;
+        }
 
         // Infer from content
         let inferred = infer_shared_skill_target(project_path, root);
@@ -127,16 +128,18 @@ pub fn reconcile_shared_skill_targets(
             .find(|t| t.value == "codex" && has_legacy_skills(project_path, t));
 
         if inferred.as_deref() == Some("agents")
-            && let Some(codex) = legacy_codex {
-                reconciled.push((*codex).clone());
-                continue;
-            }
+            && let Some(codex) = legacy_codex
+        {
+            reconciled.push((*codex).clone());
+            continue;
+        }
 
         if let Some(ref inferred_val) = inferred
-            && let Some(inferred_tool) = group.iter().find(|t| &t.value == inferred_val) {
-                reconciled.push((*inferred_tool).clone());
-                continue;
-            }
+            && let Some(inferred_tool) = group.iter().find(|t| &t.value == inferred_val)
+        {
+            reconciled.push((*inferred_tool).clone());
+            continue;
+        }
 
         // Existing skills -> prefer agents
         if has_current_skills(project_path, root) {

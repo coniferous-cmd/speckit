@@ -10,9 +10,8 @@
 //! context to localize the regression without re-reading the plan.
 
 use speckit_core::templates::generation::{
-    normalize_for_parity, parity_fixture_hashes, parity_hash,
-    generate_skill_content, get_skill_templates, parse_skill_frontmatter,
-    speckit_generated_by_version, SPECKIT_CLI_ALLOWED_TOOLS,
+    SPECKIT_CLI_ALLOWED_TOOLS, generate_skill_content, get_skill_templates, normalize_for_parity,
+    parity_fixture_hashes, parity_hash, parse_skill_frontmatter, speckit_generated_by_version,
 };
 use speckit_core::templates::types::SkillTemplate;
 use speckit_core::templates::workflows;
@@ -340,8 +339,7 @@ fn parse_skill_frontmatter_handles_unterminated() {
 #[test]
 fn generated_body_matches_canonical_template_body() {
     let entries = get_skill_templates(None);
-    let version =
-        speckit_core::templates::generation::PARITY_BASELINE_VERSION.to_string();
+    let version = speckit_core::templates::generation::PARITY_BASELINE_VERSION.to_string();
     for entry in &entries {
         let content = generate_skill_content(&entry.template, &version, None);
         // The body begins right after the closing frontmatter line.
@@ -487,8 +485,7 @@ fn generated_content_hash_matches_fixture_for_every_workflow() {
     // SHA-256 as the corresponding OpenSpec fixture hash (after key substitution:
     // openspec-*  ->  speckit-*).
     let entries = get_skill_templates(None);
-    let version =
-        speckit_core::templates::generation::PARITY_BASELINE_VERSION.to_string();
+    let version = speckit_core::templates::generation::PARITY_BASELINE_VERSION.to_string();
     for entry in &entries {
         let content = generate_skill_content(&entry.template, &version, None);
         let hash = parity_hash(&content);

@@ -596,9 +596,7 @@ pub fn read_project_config(project_root: &Path) -> Option<ProjectConfig> {
 
     // Parse references field.
     let refs_key = serde_yaml::Value::String("references".into());
-    let references = raw_mapping
-        .get(&refs_key)
-        .and_then(parse_declaration_list);
+    let references = raw_mapping.get(&refs_key).and_then(parse_declaration_list);
 
     // Parse store pointer field.
     let store_key = serde_yaml::Value::String("store".into());

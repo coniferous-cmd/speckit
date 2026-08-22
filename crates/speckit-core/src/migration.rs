@@ -185,10 +185,35 @@ pub fn legacy_migration_notice(migration: &LegacyToolMigration) -> String {
 }
 
 /// Performs one-time migration if the global config does not yet have a profile field.
-pub fn migrate_if_needed(_project_path: &Path, _tools: &[&str]) -> Result<()> {
-    // In a full implementation, this would read the global config,
-    // scan for installed workflows, and set the profile field.
-    // For the port, this is a no-op when no config exists.
+pub fn migrate_if_needed(project_path: &Path, tools: &[&str]) -> Result<()> {
+    let config_path = crate::global_config::get_global_config_path();
+    let raw = match std::fs::read_to_string(&config_path) {
+        Ok(content) => serde_json::from_str::<serde_json::Value>(&content).map_err(|error| {
+            anyhow::anyhow!("Invalid JSON in {}: {error}", config_path.display())
+        })?,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(error.into()),
+    };
+
+    // An explicit profile always wins. This keeps migration one-shot and
+    // avoids changing a user's later configuration choices.
+    if raw.get("profile").is_some() {
+        return Ok(());
+    }
+
+    let installed = scan_installed_workflows(project_path, tools);
+    if installed.is_empty() {
+        return Ok(());
+    }
+
+    let mut config = crate::global_config::get_global_config();
+    config.profile = crate::global_config::Profile::Custom;
+    config.workflows = Some(installed.clone());
+    crate::global_config::save_global_config(&config)?;
+    println!(
+        "Migrated: custom profile with {} installed workflows",
+        installed.len()
+    );
     Ok(())
 }
 
@@ -255,9 +280,10 @@ fn collect_legacy_tool_migrations(
                 continue;
             }
             if let Some(ids) = tool_ids
-                && !ids.contains(&tool.value.as_str()) {
-                    continue;
-                }
+                && !ids.contains(&tool.value.as_str())
+            {
+                continue;
+            }
 
             let legacy_root_path = project_path.join(&legacy.root);
             if !legacy_root_path.exists() {

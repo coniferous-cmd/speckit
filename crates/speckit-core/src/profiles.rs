@@ -117,7 +117,9 @@ fn resolve_filter_for_profile(profile: &Profile) -> (Profile, Option<Vec<String>
             if workflows.is_empty() {
                 (Profile::Custom, Some(vec![]))
             } else if workflows.len() == ALL_WORKFLOWS.len()
-                && workflows.iter().all(|w| ALL_WORKFLOWS.contains(&w.as_str()))
+                && workflows
+                    .iter()
+                    .all(|w| ALL_WORKFLOWS.contains(&w.as_str()))
             {
                 (Profile::Custom, None)
             } else {

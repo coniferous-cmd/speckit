@@ -9,9 +9,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::config::{self, SPECKIT_DIR_NAME};
+use crate::global_config::Profile;
 use crate::legacy_cleanup::{self, LegacyDetectionResult};
 use crate::planning_home;
-use crate::global_config::Profile;
 use crate::profiles;
 
 /// Options for the init command.
@@ -114,7 +114,9 @@ impl InitCommand {
         let validated_tools = self.validate_tools(&selected_tools, &project_path)?;
 
         let (_profile, workflow_filter) = self.resolve_workflow_filter(&project_path)?;
-        let workflows = workflow_filter.clone().unwrap_or_else(profiles::all_workflow_strings);
+        let workflows = workflow_filter
+            .clone()
+            .unwrap_or_else(profiles::all_workflow_strings);
 
         // The welcome screen is intentionally limited to interactive init. In
         // particular, `--tools` and CI/non-TTY invocations must never wait for
@@ -139,8 +141,12 @@ impl InitCommand {
         // Create config.yaml if needed
         let config_status = self.create_config(&speckit_path, extend_mode)?;
 
-        if validated_tools.iter().any(|tool| tool.value == "github-copilot") {
-            let opt_in = self.copilot_cloud_option
+        if validated_tools
+            .iter()
+            .any(|tool| tool.value == "github-copilot")
+        {
+            let opt_in = self
+                .copilot_cloud_option
                 .or_else(|| crate::github_copilot::read_copilot_cloud_opt_in(&project_path))
                 .or_else(|| {
                     crate::github_copilot::has_existing_managed_cloud_files(&project_path)
@@ -416,10 +422,8 @@ impl InitCommand {
             // `update` both consume `templates::generation::get_skill_templates`
             // so they can never drift on which skills exist or what their
             // frontmatter looks like.
-            let skill_entries =
-                crate::templates::generation::get_skill_templates(workflow_filter);
-            let generated_by_version =
-                crate::templates::generation::speckit_generated_by_version();
+            let skill_entries = crate::templates::generation::get_skill_templates(workflow_filter);
+            let generated_by_version = crate::templates::generation::speckit_generated_by_version();
             for entry in &skill_entries {
                 let skill_dir = tool.skills_path.join(&entry.dir_name);
                 fs::create_dir_all(&skill_dir)?;
@@ -457,9 +461,11 @@ impl InitCommand {
             None => None,
             Some("core") => Some(Profile::Core),
             Some("custom") | Some("expanded") => Some(Profile::Custom),
-            Some(other) => return Err(anyhow::anyhow!(
-                "Unknown profile '{other}'. Supported profiles: core, expanded, custom."
-            )),
+            Some(other) => {
+                return Err(anyhow::anyhow!(
+                    "Unknown profile '{other}'. Supported profiles: core, expanded, custom."
+                ));
+            }
         };
 
         let (profile, filter) = profiles::resolve_profile_and_workflow_filter(

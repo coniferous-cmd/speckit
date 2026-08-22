@@ -259,10 +259,10 @@ impl Validator {
             .collect();
 
         for i in 0..components.len() {
-            if (components[i] == "specs" || components[i] == "changes")
-                && i + 1 < components.len() {
-                    return components[i + 1].to_string();
-                }
+            if (components[i] == "specs" || components[i] == "changes") && i + 1 < components.len()
+            {
+                return components[i + 1].to_string();
+            }
         }
 
         let file_name = components.last().unwrap_or(&"");

@@ -530,13 +530,14 @@ fn record_if_skipped_header(
         return;
     }
     if let Some(caps) = H3_HEADER.captures(&lines[index])
-        && !REQUIREMENT_HEADER_REGEX.is_match(&lines[index]) {
-            skipped_headers.push(SkippedHeader {
-                header: caps[1].trim().to_string(),
-                section: section_name.to_string(),
-                line: body_start_line + index,
-            });
-        }
+        && !REQUIREMENT_HEADER_REGEX.is_match(&lines[index])
+    {
+        skipped_headers.push(SkippedHeader {
+            header: caps[1].trim().to_string(),
+            section: section_name.to_string(),
+            line: body_start_line + index,
+        });
+    }
 }
 
 /// Parse requirement names from a REMOVED section.  Supports both canonical

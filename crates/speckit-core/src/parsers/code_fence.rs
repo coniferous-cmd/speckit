@@ -38,8 +38,7 @@ fn get_fence_marker(line: &str) -> Option<ActiveFence> {
 fn is_closing_fence(line: &str, active_fence: &ActiveFence) -> bool {
     FENCE_CLOSE.captures(line).is_some_and(|caps| {
         let matched = &caps[1];
-        matched.starts_with(active_fence.marker)
-            && matched.len() >= active_fence.length
+        matched.starts_with(active_fence.marker) && matched.len() >= active_fence.length
     })
 }
 
@@ -65,12 +64,11 @@ pub fn build_code_fence_mask(lines: &[String]) -> Vec<bool> {
     for (i, line) in lines.iter().enumerate() {
         match active_fence {
             None => {
-                if !fence_seen
-                    && let Some(fence) = get_fence_marker(line) {
-                        mask[i] = true;
-                        active_fence = Some(fence);
-                        fence_seen = true;
-                    }
+                if !fence_seen && let Some(fence) = get_fence_marker(line) {
+                    mask[i] = true;
+                    active_fence = Some(fence);
+                    fence_seen = true;
+                }
             }
             Some(ref fence) => {
                 mask[i] = true;

@@ -93,10 +93,12 @@ impl UpdateCommand {
         // it never prompts.
         if configured_tools.iter().any(|id| id == "github-copilot") {
             if let Some(opt_in) = crate::github_copilot::read_copilot_cloud_opt_in(&resolved_path) {
-                let _ = crate::github_copilot::write_copilot_cloud_files(&resolved_path, Some(opt_in))?;
+                let _ =
+                    crate::github_copilot::write_copilot_cloud_files(&resolved_path, Some(opt_in))?;
             } else if crate::github_copilot::has_existing_managed_cloud_files(&resolved_path) {
                 // Migration: managed files exist, honor them.
-                let _ = crate::github_copilot::write_copilot_cloud_files(&resolved_path, Some(true))?;
+                let _ =
+                    crate::github_copilot::write_copilot_cloud_files(&resolved_path, Some(true))?;
             }
         }
 
@@ -177,9 +179,10 @@ impl UpdateCommand {
         // 13. Show setup notes
         for tool_id in &configured_tools {
             if let Some(tool) = AI_TOOLS.iter().find(|t| t.value == *tool_id)
-                && let Some(ref note) = tool.setup_note {
-                    println!("Setup required for {}: {}", tool.name, note);
-                }
+                && let Some(ref note) = tool.setup_note
+            {
+                println!("Setup required for {}: {}", tool.name, note);
+            }
         }
 
         println!();
@@ -241,21 +244,22 @@ impl UpdateCommand {
             .filter(|tool_id| {
                 // Simple check: look for skill directories and compare
                 if let Some(tool) = AI_TOOLS.iter().find(|t| t.value == **tool_id)
-                    && let Some(ref skills_dir) = tool.skills_dir {
-                        let skills_path = project_path.join(skills_dir).join("skills");
-                        // If skills dir exists but is empty or missing SKILL.md files,
-                        // mark as needing update
-                        if skills_path.exists() {
-                            let has_any_skill = migration::ALL_WORKFLOWS.iter().any(|w| {
-                                if let Some(dir_name) = migration::workflow_to_skill_dir(w) {
-                                    skills_path.join(dir_name).join("SKILL.md").exists()
-                                } else {
-                                    false
-                                }
-                            });
-                            return !has_any_skill;
-                        }
+                    && let Some(ref skills_dir) = tool.skills_dir
+                {
+                    let skills_path = project_path.join(skills_dir).join("skills");
+                    // If skills dir exists but is empty or missing SKILL.md files,
+                    // mark as needing update
+                    if skills_path.exists() {
+                        let has_any_skill = migration::ALL_WORKFLOWS.iter().any(|w| {
+                            if let Some(dir_name) = migration::workflow_to_skill_dir(w) {
+                                skills_path.join(dir_name).join("SKILL.md").exists()
+                            } else {
+                                false
+                            }
+                        });
+                        return !has_any_skill;
                     }
+                }
                 false
             })
             .cloned()

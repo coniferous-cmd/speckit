@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+use crate::project_config::{classify_speckit_dir, store_pointer_problem};
 use crate::speckit_root::inspect_speckit_root;
 use crate::store::errors::{RootSelectionError, StoreError, StoreErrorOptions};
 use crate::store::foundation::{
@@ -449,46 +450,31 @@ fn resolve_nearest_or_declared_root(
         return Ok(make_root(nearest_root, SpeckitRootSource::Nearest, None));
     }
 
-    // Config-only directory — check for a config file with a store pointer.
-    let config_yaml = speckit.join("config.yaml");
-    let config_yml = speckit.join("config.yml");
-    let config_path = if config_yaml.is_file() {
-        Some(config_yaml)
-    } else if config_yml.is_file() {
-        Some(config_yml)
-    } else {
-        None
-    };
+    // Config-only directory — use the shared targeted parser so malformed
+    // pointers cannot silently redirect work to the local directory.
+    let classification = classify_speckit_dir(nearest_root);
+    if let Some(reason) = classification.pointer.malformed {
+        let file = classification
+            .pointer
+            .file_path
+            .map(|path| path.display().to_string())
+            .unwrap_or_else(|| "speckit/config.yaml".to_string());
+        return Err(RootSelectionError::new(
+            format!(
+                "Invalid store declaration in {file}: {}.",
+                store_pointer_problem(&reason)
+            ),
+            "invalid_store_pointer",
+            StoreErrorOptions {
+                target: Some("store.pointer".into()),
+                fix: Some(format!("Fix the YAML syntax or store value in {file}.")),
+            },
+        ));
+    }
 
-    let Some(config_path) = config_path else {
-        return Ok(make_root(nearest_root, SpeckitRootSource::Nearest, None));
-    };
-
-    // Try to read a store pointer from the config.
-    if let Ok(content) = std::fs::read_to_string(&config_path)
-        && let Ok(config) = serde_yaml::from_str::<serde_yaml::Value>(&content)
-            && let Some(store_value) = config.get("store") {
-                let store_id = if let Some(s) = store_value.as_str() {
-                    s.to_string()
-                } else if let Some(map) = store_value.as_mapping() {
-                    // store: { id: "my-store" }
-                    map.get(serde_yaml::Value::String("id".into()))
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        .to_string()
-                } else {
-                    String::new()
-                };
-
-                if !store_id.is_empty() {
-                    // Resolve the store pointer
-                    return resolve_store_root(
-                        &store_id,
-                        global_data_dir,
-                        SpeckitRootSource::ConfigPointer,
-                    );
-                }
-            }
+    if let Some(store_id) = classification.pointer.value {
+        return resolve_store_root(&store_id, global_data_dir, SpeckitRootSource::ConfigPointer);
+    }
 
     // No store pointer found — treat as a local root.
     Ok(make_root(nearest_root, SpeckitRootSource::Nearest, None))

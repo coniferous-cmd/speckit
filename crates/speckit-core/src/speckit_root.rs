@@ -59,17 +59,14 @@ pub struct CreatedPathLedgerEntry {
     pub kind: CreatedPathKind,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct InspectionPresence {
     pub present: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
 }
 
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SpeckitRootInspection {
     pub present: Option<bool>,
     pub config: InspectionPresence,
@@ -79,7 +76,6 @@ pub struct SpeckitRootInspection {
     pub healthy: bool,
     pub diagnostics: Vec<StoreDiagnostic>,
 }
-
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EnsureSpeckitRootResult {

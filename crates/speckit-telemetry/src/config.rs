@@ -35,9 +35,10 @@ const CONFIG_FILE_NAME: &str = "config.json";
 fn get_config_dir() -> PathBuf {
     // XDG_CONFIG_HOME takes precedence.
     if let Ok(xdg) = std::env::var("XDG_CONFIG_HOME")
-        && !xdg.is_empty() {
-            return PathBuf::from(xdg).join(CONFIG_DIR_NAME);
-        }
+        && !xdg.is_empty()
+    {
+        return PathBuf::from(xdg).join(CONFIG_DIR_NAME);
+    }
 
     #[cfg(target_os = "windows")]
     {

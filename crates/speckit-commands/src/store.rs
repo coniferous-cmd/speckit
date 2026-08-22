@@ -234,6 +234,32 @@ pub async fn store_register(
             .unwrap_or_else(|| "unknown".to_string())
     };
 
+    if !store_yaml.exists() {
+        if !yes {
+            if !atty_is_tty() {
+                anyhow::bail!(
+                    "Registering this store will create identity metadata at {}. Re-run with --yes.",
+                    store_yaml.display()
+                );
+            }
+            let confirmed = inquire::Confirm::new(&format!(
+                "Create store identity metadata at {}?",
+                store_yaml.display()
+            ))
+            .with_default(false)
+            .prompt()
+            .map_err(|error| anyhow::anyhow!("Confirmation cancelled: {error}"))?;
+            if !confirmed {
+                anyhow::bail!("Store registration cancelled.");
+            }
+        }
+        let metadata = serde_json::json!({
+            "id": store_id,
+            "version": "1.0",
+        });
+        std::fs::write(&store_yaml, serde_yaml::to_string(&metadata)?)?;
+    }
+
     register_store_in_registry(&store_id, &store_path)?;
 
     let payload = StoreMutationOutput {

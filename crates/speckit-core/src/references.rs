@@ -45,13 +45,13 @@ pub struct ReferenceIndexEntry {
 }
 
 /// Build a warning diagnostic.
-pub fn warning(code: &str, message: &str, fix: &str) -> StoreDiagnostic {
+pub fn warning(code: &str, message: impl Into<String>, fix: impl Into<String>) -> StoreDiagnostic {
     StoreDiagnostic {
         severity: "warning".to_string(),
         code: code.to_string(),
-        message: message.to_string(),
+        message: message.into(),
         target: Some("references".to_string()),
-        fix: Some(fix.to_string()),
+        fix: Some(fix.into()),
     }
 }
 
@@ -68,17 +68,18 @@ pub fn is_shell_safe_remote(remote: &str) -> bool {
 /// Build a registration fix hint for an unresolved store.
 pub fn register_fix(id: &str, remote: Option<&str>) -> String {
     if let Some(r) = remote
-        && is_shell_safe_remote(r) {
-            let checkout = dirs::home_dir()
-                .unwrap_or_else(|| std::path::PathBuf::from("."))
-                .join("speckit")
-                .join(id);
-            let quoted = format!("'{}'", checkout.display());
-            return format!(
-                "git clone -- {} {} && speckit store register {} --id {}",
-                r, quoted, quoted, id
-            );
-        }
+        && is_shell_safe_remote(r)
+    {
+        let checkout = dirs::home_dir()
+            .unwrap_or_else(|| std::path::PathBuf::from("."))
+            .join("speckit")
+            .join(id);
+        let quoted = format!("'{}'", checkout.display());
+        return format!(
+            "git clone -- {} {} && speckit store register {} --id {}",
+            r, quoted, quoted, id
+        );
+    }
     format!(
         "Get a checkout from a teammate and run: speckit store register <path> --id {}",
         id
@@ -286,16 +287,18 @@ pub struct DeclarationEntry {
 
 /// Build the referenced-store index from declaration entries.
 ///
-/// This is a simplified version that builds entries without requiring
-/// filesystem access to referenced stores. The full version in the
-/// TypeScript implementation performs registry reads and spec collection,
-/// but this port provides the rendering and data structures.
+/// Registry resolution is deliberately best-effort: an unavailable or
+/// unhealthy reference becomes a warning entry, while healthy references
+/// include the real spec summaries from their store.
 pub fn build_reference_index_entries(
     declarations: &[DeclarationEntry],
     resolved_root_path: &str,
     include_specs: bool,
 ) -> Vec<ReferenceIndexEntry> {
     let mut entries = Vec::new();
+    let registry = crate::store::registry::read_registry_snapshot(None);
+    let resolved_root = std::fs::canonicalize(resolved_root_path)
+        .unwrap_or_else(|_| std::path::PathBuf::from(resolved_root_path));
 
     for decl in declarations {
         // Skip self-references by id
@@ -318,25 +321,78 @@ pub fn build_reference_index_entries(
             continue;
         }
 
-        // In the full implementation, this would look up the registry
-        // and collect spec entries. For the port, we provide unresolved entries.
+        let Some(registry_entries) = registry.entries.as_ref() else {
+            entries.push(ReferenceIndexEntry {
+                store_id: decl.id.clone(),
+                root: None,
+                specs: None,
+                fetch: None,
+                status: vec![warning(
+                    "reference_registry_unreadable",
+                    format!("Referenced store '{}' cannot be checked: the store registry is unreadable.", decl.id),
+                    "Run: speckit store doctor",
+                )],
+            });
+            continue;
+        };
+        let Some(registry_entry) = registry_entries.iter().find(|entry| entry.id == decl.id) else {
+            entries.push(ReferenceIndexEntry {
+                store_id: decl.id.clone(),
+                root: None,
+                specs: None,
+                fetch: if include_specs {
+                    Some(fetch_recipe(&decl.id))
+                } else {
+                    None
+                },
+                status: vec![warning(
+                    "reference_unresolved",
+                    format!(
+                        "Referenced store '{}' is not registered on this machine.",
+                        decl.id
+                    ),
+                    &register_fix(&decl.id, decl.remote.as_deref()),
+                )],
+            });
+            continue;
+        };
+        let root = crate::store::registry::get_store_root(&registry_entry.backend);
+        let root = std::fs::canonicalize(&root).unwrap_or(root);
+        if root == resolved_root {
+            continue;
+        }
+        if !root.join("speckit").is_dir() {
+            entries.push(ReferenceIndexEntry {
+                store_id: decl.id.clone(),
+                root: None,
+                specs: None,
+                fetch: None,
+                status: vec![warning(
+                    "reference_root_unhealthy",
+                    format!(
+                        "Referenced store '{}' is registered but not usable.",
+                        decl.id
+                    ),
+                    &format!("Run: speckit store doctor {}", decl.id),
+                )],
+            });
+            continue;
+        }
+        let specs = if include_specs {
+            Some(collect_spec_entries(&root))
+        } else {
+            None
+        };
         entries.push(ReferenceIndexEntry {
             store_id: decl.id.clone(),
-            root: None,
-            specs: None,
+            root: Some(root.to_string_lossy().to_string()),
+            specs,
             fetch: if include_specs {
                 Some(fetch_recipe(&decl.id))
             } else {
                 None
             },
-            status: vec![warning(
-                "reference_unresolved",
-                &format!(
-                    "Referenced store '{}' is not registered on this machine.",
-                    decl.id
-                ),
-                &register_fix(&decl.id, decl.remote.as_deref()),
-            )],
+            status: Vec::new(),
         });
     }
 
@@ -348,15 +404,54 @@ pub fn build_reference_index_entries(
     entries
 }
 
+fn collect_spec_entries(root: &std::path::Path) -> Vec<ReferenceSpecEntry> {
+    let specs_root = root.join("speckit").join("specs");
+    let mut entries = Vec::new();
+    collect_spec_entries_recursive(&specs_root, &specs_root, &mut entries);
+    entries.sort_by(|a, b| a.id.cmp(&b.id));
+    entries
+}
+
+fn collect_spec_entries_recursive(
+    root: &std::path::Path,
+    current: &std::path::Path,
+    output: &mut Vec<ReferenceSpecEntry>,
+) {
+    let Ok(items) = std::fs::read_dir(current) else {
+        return;
+    };
+    for item in items.filter_map(Result::ok) {
+        let path = item.path();
+        if path.is_dir() {
+            collect_spec_entries_recursive(root, &path, output);
+        } else if path.file_name().is_some_and(|name| name == "spec.md") {
+            let Ok(relative) = path.strip_prefix(root) else {
+                continue;
+            };
+            let Some(parent) = relative.parent() else {
+                continue;
+            };
+            let content = std::fs::read_to_string(&path).unwrap_or_default();
+            output.push(ReferenceSpecEntry {
+                id: parent
+                    .to_string_lossy()
+                    .replace(std::path::MAIN_SEPARATOR, "/"),
+                summary: extract_first_purpose_line(&content),
+            });
+        }
+    }
+}
+
 /// Truncate spec lists to fit within the rendered byte budget.
 fn truncate_entries_to_budget(entries: &mut Vec<ReferenceIndexEntry>) {
     // First pass: find which entries need truncation and how much
     let mut truncations = Vec::new();
     for (idx, entry) in entries.iter().enumerate() {
         if let Some(ref specs) = entry.specs
-            && specs.len() > 10 {
-                truncations.push((idx, specs.len()));
-            }
+            && specs.len() > 10
+        {
+            truncations.push((idx, specs.len()));
+        }
     }
 
     // Second pass: apply truncations

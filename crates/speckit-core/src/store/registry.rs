@@ -3,9 +3,10 @@ use std::path::{Path, PathBuf};
 use crate::store::errors::{StoreError, StoreErrorOptions};
 use crate::store::foundation::{
     ResolveGitStoreBackendInput, StoreBackendConfig, StoreGitBackendConfig, StorePathOptions,
-    StoreRegistryEntry, StoreRegistryState, get_store_metadata_path, list_store_registry_entries, read_optional_store_metadata_state,
-    read_store_registry_state, resolve_git_store_backend_config, update_store_registry_state,
-    validate_store_id, write_store_metadata_state,
+    StoreRegistryEntry, StoreRegistryState, get_store_metadata_path, list_store_registry_entries,
+    read_optional_store_metadata_state, read_store_registry_state,
+    resolve_git_store_backend_config, update_store_registry_state, validate_store_id,
+    write_store_metadata_state,
 };
 
 // Re-export for backward compatibility with operations.rs

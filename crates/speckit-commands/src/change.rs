@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use speckit_core::root_selection::{ResolveSpeckitRootOptions, resolve_speckit_root};
+use speckit_core::validation::{ValidationLevel, Validator};
 
 use crate::shared_output::StoreDiagnostic;
 
@@ -323,15 +324,24 @@ async fn validate_change(name: &str, change_dir: &Path, strict: bool) -> ChangeV
             message: "proposal.md not found".to_string(),
         });
     } else {
-        // Validate proposal has content
-        if let Ok(content) = tokio::fs::read_to_string(&proposal_path).await {
-            if content.trim().is_empty() {
-                issues.push(ValidationIssue {
-                    level: "WARNING".to_string(),
-                    path: "proposal.md".to_string(),
-                    message: "proposal.md is empty".to_string(),
-                });
-            }
+        match Validator::new(strict).validate_change(&proposal_path) {
+            Ok(report) => issues.extend(report.issues.into_iter().map(|issue| {
+                ValidationIssue {
+                    level: match issue.level {
+                        ValidationLevel::Error => "ERROR",
+                        ValidationLevel::Warning => "WARNING",
+                        ValidationLevel::Info => "INFO",
+                    }
+                    .to_string(),
+                    path: issue.path,
+                    message: issue.message,
+                }
+            })),
+            Err(error) => issues.push(ValidationIssue {
+                level: "ERROR".to_string(),
+                path: "proposal.md".to_string(),
+                message: error.to_string(),
+            }),
         }
     }
 
@@ -379,7 +389,13 @@ async fn validate_change(name: &str, change_dir: &Path, strict: bool) -> ChangeV
     }
 
     ChangeValidationReport {
-        valid: !issues.iter().any(|i| i.level == "ERROR"),
+        valid: if strict {
+            !issues
+                .iter()
+                .any(|i| i.level == "ERROR" || i.level == "WARNING")
+        } else {
+            !issues.iter().any(|i| i.level == "ERROR")
+        },
         issues,
     }
 }

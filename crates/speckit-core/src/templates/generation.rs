@@ -8,8 +8,8 @@
 //! workflow has exactly one Speckit counterpart, and brand substitution
 //! (`openspec` -> `speckit`, `OpenSpec` -> `Speckit`) is the only content delta.
 
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
-use sha2::{Sha256, Digest};
 
 /// Skill template with directory name and workflow ID mapping.
 ///
@@ -215,9 +215,10 @@ pub fn parse_skill_frontmatter(content: &str) -> Option<ParsedSkillFrontmatter> 
         }
         if !in_metadata {
             if let Some((k, v)) = split_kv(line)
-                && k == "name" {
-                    name = Some(v.to_string());
-                }
+                && k == "name"
+            {
+                name = Some(v.to_string());
+            }
             continue;
         }
         // Inside metadata: keys are indented.
@@ -307,18 +308,54 @@ pub const PARITY_BASELINE_VERSION: &str = "PARITY-BASELINE";
 /// `skill_parity.rs` simultaneously.
 pub fn parity_fixture_hashes() -> std::collections::HashMap<&'static str, &'static str> {
     let entries: [(&'static str, &'static str); 12] = [
-        ("speckit-explore", "a3569a81a92b3f6d0fc044a01d76032ce6b8d09e0710ad8c3b932a2922e9454f"),
-        ("speckit-new-change", "36f8c6c21ddb9fe0308acc6fd0998e870cc7de4c1c2762ecd0dfe8582022a9df"),
-        ("speckit-continue-change", "0aade44dd759630a49de80a6f9de546620655892d3d9d115fd043de14b03febc"),
-        ("speckit-apply-change", "6b5ef0f6130f82eae145227db7d5f967654850fb2878a022fa81957b5554f2ea"),
-        ("speckit-update-change", "e28c0d7196a20a167bb7732108decab964e1493ecbfeff94d117c24b011c8fa5"),
-        ("speckit-ff-change", "ed537e6aa0696c76f471b21ae5c31bcd13867dc61e8695a58b1fe45ef85b7778"),
-        ("speckit-sync-specs", "3e6622d8b1023efc7759fb5c4b3d65f380deb79640086f9c8740314cee7648c3"),
-        ("speckit-archive-change", "62025dabf21b40be46b41c2c2a520035d3a8676780924e179feaf80e74b2af4f"),
-        ("speckit-bulk-archive-change", "b5e1fecb057629b7e96a80f7d2b36ab043c211a7dfb50d234bf3d088977b690f"),
-        ("speckit-verify-change", "e947a2f19344b49c30eee655caf8f44dad1accdb9b524a31bcfaf72250ce8722"),
-        ("speckit-onboard", "470190876e10cae692f62c2ea02e2be0195b5edd572603a97a069f6cb1694e08"),
-        ("speckit-propose", "f042cc05799239510e7bd3deb7a7df8d51b52437a66a45c760226eb1e095eb1f"),
+        (
+            "speckit-explore",
+            "a3569a81a92b3f6d0fc044a01d76032ce6b8d09e0710ad8c3b932a2922e9454f",
+        ),
+        (
+            "speckit-new-change",
+            "36f8c6c21ddb9fe0308acc6fd0998e870cc7de4c1c2762ecd0dfe8582022a9df",
+        ),
+        (
+            "speckit-continue-change",
+            "0aade44dd759630a49de80a6f9de546620655892d3d9d115fd043de14b03febc",
+        ),
+        (
+            "speckit-apply-change",
+            "6b5ef0f6130f82eae145227db7d5f967654850fb2878a022fa81957b5554f2ea",
+        ),
+        (
+            "speckit-update-change",
+            "e28c0d7196a20a167bb7732108decab964e1493ecbfeff94d117c24b011c8fa5",
+        ),
+        (
+            "speckit-ff-change",
+            "ed537e6aa0696c76f471b21ae5c31bcd13867dc61e8695a58b1fe45ef85b7778",
+        ),
+        (
+            "speckit-sync-specs",
+            "3e6622d8b1023efc7759fb5c4b3d65f380deb79640086f9c8740314cee7648c3",
+        ),
+        (
+            "speckit-archive-change",
+            "62025dabf21b40be46b41c2c2a520035d3a8676780924e179feaf80e74b2af4f",
+        ),
+        (
+            "speckit-bulk-archive-change",
+            "b5e1fecb057629b7e96a80f7d2b36ab043c211a7dfb50d234bf3d088977b690f",
+        ),
+        (
+            "speckit-verify-change",
+            "e947a2f19344b49c30eee655caf8f44dad1accdb9b524a31bcfaf72250ce8722",
+        ),
+        (
+            "speckit-onboard",
+            "470190876e10cae692f62c2ea02e2be0195b5edd572603a97a069f6cb1694e08",
+        ),
+        (
+            "speckit-propose",
+            "f042cc05799239510e7bd3deb7a7df8d51b52437a66a45c760226eb1e095eb1f",
+        ),
     ];
     entries.into_iter().collect()
 }

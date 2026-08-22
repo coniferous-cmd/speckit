@@ -5,11 +5,10 @@ use crate::store::errors::{
     StoreDiagnostic, StoreDiagnosticSeverity, StoreError, StoreErrorOptions, make_store_diagnostic,
 };
 use crate::store::foundation::{
-    ResolveGitStoreBackendInput, StoreGitBackendConfig,
-    StoreMetadataState, StorePathOptions, StoreRegistryState, canonicalize_existing_path,
-    get_store_metadata_dir, get_store_metadata_path, get_store_registry_path,
-    get_store_root_for_backend, list_store_registry_entries,
-    read_optional_store_metadata_state, read_store_registry_state,
+    ResolveGitStoreBackendInput, StoreGitBackendConfig, StoreMetadataState, StorePathOptions,
+    StoreRegistryState, canonicalize_existing_path, get_store_metadata_dir,
+    get_store_metadata_path, get_store_registry_path, get_store_root_for_backend,
+    list_store_registry_entries, read_optional_store_metadata_state, read_store_registry_state,
     resolve_git_store_backend_config, validate_store_id, write_store_metadata_state,
 };
 use crate::store::git::{
@@ -18,8 +17,9 @@ use crate::store::git::{
     init_git_repository, is_git_repository_at_root,
 };
 use crate::store::registry::{
-    CommitStoreRegistrationInput, UnregisterStoreInput,
-    assert_no_registered_store_conflict, commit_store_registration, get_registered_store, list_registered_stores, unregister_store_registration,
+    CommitStoreRegistrationInput, UnregisterStoreInput, assert_no_registered_store_conflict,
+    commit_store_registration, get_registered_store, list_registered_stores,
+    unregister_store_registration,
 };
 
 // ---------------------------------------------------------------------------
@@ -305,9 +305,10 @@ fn expand_user_path(input: &str) -> PathBuf {
         return dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
     }
     if (trimmed.starts_with("~/") || trimmed.starts_with("~\\"))
-        && let Some(home) = dirs::home_dir() {
-            return home.join(&trimmed[2..]);
-        }
+        && let Some(home) = dirs::home_dir()
+    {
+        return home.join(&trimmed[2..]);
+    }
     PathBuf::from(trimmed)
 }
 
@@ -415,26 +416,27 @@ fn assert_not_config_only_pointer_root(store_root: &Path) -> Result<(), StoreErr
     for config_path in &config_candidates {
         if config_path.is_file()
             && let Ok(content) = std::fs::read_to_string(config_path)
-                && let Ok(config) = serde_yaml::from_str::<serde_yaml::Value>(&content)
-                    && config.get("store").is_some() {
-                        return Err(StoreError::new(
-                            format!(
-                                "{} is a config-only root (it declares a store: pointer). \
+            && let Ok(config) = serde_yaml::from_str::<serde_yaml::Value>(&content)
+            && config.get("store").is_some()
+        {
+            return Err(StoreError::new(
+                format!(
+                    "{} is a config-only root (it declares a store: pointer). \
                                  Use the target store directly instead.",
-                                store_root.display()
-                            ),
-                            "config_only_pointer_root",
-                            StoreErrorOptions {
-                                target: Some("store.root".into()),
-                                fix: Some(format!(
-                                    "Run the command against the store that '{}' points to, \
+                    store_root.display()
+                ),
+                "config_only_pointer_root",
+                StoreErrorOptions {
+                    target: Some("store.root".into()),
+                    fix: Some(format!(
+                        "Run the command against the store that '{}' points to, \
                                      or remove the store: key from {}.",
-                                    store_root.display(),
-                                    config_path.display()
-                                )),
-                            },
-                        ));
-                    }
+                        store_root.display(),
+                        config_path.display()
+                    )),
+                },
+            ));
+        }
     }
 
     Ok(())
@@ -470,16 +472,17 @@ pub fn prepare_store_setup(input: &SetupStoreInput) -> Result<PreparedStoreSetup
     let id = validate_store_id(id_str)?;
 
     if let Some(ref remote) = input.remote
-        && remote.is_empty() {
-            return Err(StoreError::new(
-                "Store remote must not be empty when provided.",
-                "store_remote_empty",
-                StoreErrorOptions {
-                    target: Some("store.metadata".into()),
-                    fix: Some("Pass a clone URL: --remote <url>.".into()),
-                },
-            ));
-        }
+        && remote.is_empty()
+    {
+        return Err(StoreError::new(
+            "Store remote must not be empty when provided.",
+            "store_remote_empty",
+            StoreErrorOptions {
+                target: Some("store.metadata".into()),
+                fix: Some("Pass a clone URL: --remote <url>.".into()),
+            },
+        ));
+    }
 
     let store_root = resolve_setup_root(&id, input.path.as_deref())?;
     let kind = path_kind(&store_root);
@@ -502,30 +505,31 @@ pub fn prepare_store_setup(input: &SetupStoreInput) -> Result<PreparedStoreSetup
         // Simple heuristic: walk up from the store root's parent looking
         // for a .git directory.
         if let Some(parent) = store_root.parent()
-            && let Some(nearest) = nearest_existing_directory(parent) {
-                let mut cur = nearest.clone();
-                loop {
-                    if is_git_repository_at_root(&cur)
-                        && normalize_for_comparison(&cur) != normalize_for_comparison(&store_root)
-                    {
-                        return Err(StoreError::new(
-                            format!(
-                                "Store setup path is inside another Git repository: {}",
-                                cur.display()
-                            ),
-                            "store_setup_inside_git_repo",
-                            StoreErrorOptions {
-                                target: Some("store.root".into()),
-                                fix: Some("Choose a path outside that Git repository.".into()),
-                            },
-                        ));
-                    }
-                    match cur.parent() {
-                        Some(p) if p != cur => cur = p.to_path_buf(),
-                        _ => break,
-                    }
+            && let Some(nearest) = nearest_existing_directory(parent)
+        {
+            let mut cur = nearest.clone();
+            loop {
+                if is_git_repository_at_root(&cur)
+                    && normalize_for_comparison(&cur) != normalize_for_comparison(&store_root)
+                {
+                    return Err(StoreError::new(
+                        format!(
+                            "Store setup path is inside another Git repository: {}",
+                            cur.display()
+                        ),
+                        "store_setup_inside_git_repo",
+                        StoreErrorOptions {
+                            target: Some("store.root".into()),
+                            fix: Some("Choose a path outside that Git repository.".into()),
+                        },
+                    ));
+                }
+                match cur.parent() {
+                    Some(p) if p != cur => cur = p.to_path_buf(),
+                    _ => break,
                 }
             }
+        }
     }
 
     let mut backend: Option<StoreGitBackendConfig> = None;
@@ -801,32 +805,33 @@ pub fn register_existing_store(
     };
 
     if let (Some(meta), Some(explicit)) = (&metadata, &explicit_id)
-        && meta.id != *explicit {
-            let current_registry = read_store_registry_state(&StorePathOptions::default())?;
-            let registered_elsewhere = current_registry
-                .as_ref()
-                .and_then(|r| r.stores.get(&meta.id))
-                .is_some();
+        && meta.id != *explicit
+    {
+        let current_registry = read_store_registry_state(&StorePathOptions::default())?;
+        let registered_elsewhere = current_registry
+            .as_ref()
+            .and_then(|r| r.stores.get(&meta.id))
+            .is_some();
 
-            return Err(StoreError::new(
-                format!(
-                    "Store metadata id '{}' does not match --id '{}'. The id comes from the store's committed .speckit-store/store.yaml.",
-                    meta.id, explicit
-                ),
-                "store_metadata_id_mismatch",
-                StoreErrorOptions {
-                    target: Some("store.id".into()),
-                    fix: Some(if registered_elsewhere {
-                        format!(
-                            "One checkout per store id is supported, and '{}' is already registered. Run speckit store unregister {} first to register this checkout instead.",
-                            meta.id, meta.id
-                        )
-                    } else {
-                        format!("Use --id {} or register a different folder.", meta.id)
-                    }),
-                },
-            ));
-        }
+        return Err(StoreError::new(
+            format!(
+                "Store metadata id '{}' does not match --id '{}'. The id comes from the store's committed .speckit-store/store.yaml.",
+                meta.id, explicit
+            ),
+            "store_metadata_id_mismatch",
+            StoreErrorOptions {
+                target: Some("store.id".into()),
+                fix: Some(if registered_elsewhere {
+                    format!(
+                        "One checkout per store id is supported, and '{}' is already registered. Run speckit store unregister {} first to register this checkout instead.",
+                        meta.id, meta.id
+                    )
+                } else {
+                    format!("Use --id {} or register a different folder.", meta.id)
+                }),
+            },
+        ));
+    }
 
     let id = metadata
         .as_ref()
@@ -989,8 +994,9 @@ pub fn remove_store(target: &PreparedStoreCleanup) -> Result<StoreCleanupResult,
                 ));
             }
             if let Some(ref meta) = metadata
-                && meta.id != id {
-                    return Err(StoreError::new(
+                && meta.id != id
+            {
+                return Err(StoreError::new(
                         format!(
                             "Store metadata id '{}' does not match requested id '{}'.",
                             meta.id, id
@@ -1004,7 +1010,7 @@ pub fn remove_store(target: &PreparedStoreCleanup) -> Result<StoreCleanupResult,
                             ),
                         },
                     ));
-                }
+            }
         }
         _ => {
             return Err(StoreError::new(
@@ -1230,9 +1236,10 @@ fn inspect_store(entry_id: &str, backend: &StoreGitBackendConfig) -> StoreInspec
                 for rel_dir in anchored {
                     let dir = root.join(rel_dir);
                     if path_kind(&dir) == DIRECTORY
-                        && git_directory_has_tracked_files(&root, rel_dir) == Some(false) {
-                            fragile.push(format!("{rel_dir}/"));
-                        }
+                        && git_directory_has_tracked_files(&root, rel_dir) == Some(false)
+                    {
+                        fragile.push(format!("{rel_dir}/"));
+                    }
                 }
                 if !fragile.is_empty() {
                     diagnostics.push(make_store_diagnostic(

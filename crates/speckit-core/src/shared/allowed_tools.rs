@@ -16,8 +16,7 @@ const DEFAULT_ALLOWED_TOOLS: &[&str] = &[
 ];
 
 /// Configuration for allowed tools in a project.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AllowedToolsConfig {
     /// Additional tools beyond the defaults.
     #[serde(default)]
@@ -26,7 +25,6 @@ pub struct AllowedToolsConfig {
     #[serde(default)]
     pub deny: Vec<String>,
 }
-
 
 /// Resolves the effective set of allowed tools given a config.
 ///

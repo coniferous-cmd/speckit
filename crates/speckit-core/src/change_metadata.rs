@@ -39,9 +39,7 @@ pub struct ChangeMetadata {
 /// - the string `"true"` / `"yes"` / `"1"` (case-insensitive) → `true`
 /// - the string `"false"` / `"no"` / `"0"` / `""` → `false`
 /// - any other string → error (per OpenSpec: no silent defaults)
-fn deserialize_retire_capabilities<'de, D>(
-    deserializer: D,
-) -> Result<bool, D::Error>
+fn deserialize_retire_capabilities<'de, D>(deserializer: D) -> Result<bool, D::Error>
 where
     D: serde::Deserializer<'de>,
 {

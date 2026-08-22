@@ -19,9 +19,10 @@ pub fn discover_spec_files(specs_dir: &Path) -> anyhow::Result<Vec<PathBuf>> {
 
         if path.is_file()
             && let Some(ext) = path.extension()
-                && ext == "md" {
-                    spec_files.push(path.to_path_buf());
-                }
+            && ext == "md"
+        {
+            spec_files.push(path.to_path_buf());
+        }
     }
 
     Ok(spec_files)

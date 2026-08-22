@@ -13,9 +13,10 @@ pub fn fuzzy_match(pattern: &str, text: &str) -> bool {
 
     for text_char in text_lower.chars() {
         if let Some(&pattern_char) = pattern_chars.peek()
-            && text_char == pattern_char {
-                pattern_chars.next();
-            }
+            && text_char == pattern_char
+        {
+            pattern_chars.next();
+        }
     }
 
     pattern_chars.next().is_none()

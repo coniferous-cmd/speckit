@@ -1,7 +1,9 @@
-use clap::{Args, Parser, Subcommand};
+use clap::{Parser, Subcommand};
 use std::process;
 
-use speckit_core::root_selection::{ResolveSpeckitRootOptions, resolve_speckit_root, emit_store_root_banner};
+use speckit_core::root_selection::{
+    ResolveSpeckitRootOptions, emit_store_root_banner, resolve_speckit_root,
+};
 
 use speckit_commands::{
     archive, change, completion, config, context, doctor, feedback, init, schema, shared_output,
@@ -48,6 +50,17 @@ enum Commands {
         /// Skip GitHub Copilot cloud coding-agent files without prompting
         #[arg(long = "no-copilot-cloud")]
         no_copilot_cloud: bool,
+    },
+
+    /// Deprecated alias for init.
+    #[command(hide = true)]
+    Experimental {
+        /// Target AI tool (maps to --tools)
+        #[arg(long = "tool")]
+        tool: Option<String>,
+        /// Disable interactive prompts
+        #[arg(long = "no-interactive")]
+        no_interactive: bool,
     },
 
     /// Update Speckit instruction files
@@ -771,6 +784,18 @@ async fn main() {
                 !no_animation,
                 copilot_cloud_option,
             )
+        }
+
+        Commands::Experimental {
+            tool,
+            no_interactive: _,
+        } => {
+            eprintln!(
+                "Note: \"speckit experimental\" is deprecated. Use \"speckit init\" instead."
+            );
+            let resolved =
+                std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+            init::execute(&resolved, tool, false, None, false, None)
         }
 
         Commands::Update { path, force } => {

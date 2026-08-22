@@ -165,8 +165,9 @@ pub fn inspect_relationships(input: &InspectRelationshipsInput) -> RelationshipH
     }
 
     if let Some(ref inert) = input.inert_pointer_declarations
-        && !inert.fields.is_empty() {
-            status.push(warning(
+        && !inert.fields.is_empty()
+    {
+        status.push(warning(
                 "pointer_declarations_inert",
                 &format!(
                     "{} declares {}, but commands read the resolved store's config -- these declarations are inert.",
@@ -178,35 +179,37 @@ pub fn inspect_relationships(input: &InspectRelationshipsInput) -> RelationshipH
                     inert.fields.join("/")
                 ),
             ));
-        }
+    }
 
     // Store section
     let store = input.store_facts.as_ref().map(|facts| {
         let mut store_status = Vec::new();
 
         if let (Some(canonical), Some(origin)) = (&facts.canonical_remote, &facts.origin_url)
-            && canonical != origin {
-                store_status.push(info(
-                    "store_remote_divergence",
-                    &format!(
-                        "The store.yaml remote ({}) differs from the checkout's origin ({}).",
-                        canonical, origin
-                    ),
-                ));
-            }
+            && canonical != origin
+        {
+            store_status.push(info(
+                "store_remote_divergence",
+                &format!(
+                    "The store.yaml remote ({}) differs from the checkout's origin ({}).",
+                    canonical, origin
+                ),
+            ));
+        }
 
         if let Some(ref drift) = facts.drift
-            && drift.behind > 0 {
-                let behind_commits = format!("commit{}", if drift.behind == 1 { "" } else { "s" });
-                store_status.push(info(
-                    "store_checkout_drift",
-                    &format!(
-                        "This store checkout is {} behind its upstream tracking branch; \
+            && drift.behind > 0
+        {
+            let behind_commits = format!("commit{}", if drift.behind == 1 { "" } else { "s" });
+            store_status.push(info(
+                "store_checkout_drift",
+                &format!(
+                    "This store checkout is {} behind its upstream tracking branch; \
                          teammates on newer commits may resolve different specs.",
-                        behind_commits
-                    ),
-                ));
-            }
+                    behind_commits
+                ),
+            ));
+        }
 
         StoreHealth {
             id: facts.id.clone(),

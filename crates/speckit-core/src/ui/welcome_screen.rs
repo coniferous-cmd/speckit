@@ -74,10 +74,11 @@ pub fn prefers_reduced_motion() -> bool {
         if let Ok(output) = std::process::Command::new("defaults")
             .args(["read", "com.apple.universalaccess", "reduceMotion"])
             .output()
-            && output.status.success() {
-                let stdout = String::from_utf8_lossy(&output.stdout);
-                return stdout.trim() == "1";
-            }
+            && output.status.success()
+        {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            return stdout.trim() == "1";
+        }
     }
 
     #[cfg(target_os = "linux")]
