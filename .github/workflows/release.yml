@@ -65,13 +65,13 @@ jobs:
         with:
           key: ${{ matrix.target }}
 
+      - name: Build (cross)
+        if: matrix.cross
+        run: cross build --release --target ${{ matrix.target }} -p speckit
+
       - name: Build
-        run: |
-          if [ "${{ matrix.cross }}" = "true" ]; then
-            cross build --release --target ${{ matrix.target }} -p speckit
-          else
-            cargo build --release --target ${{ matrix.target }} -p speckit
-          fi
+        if: ${{ !matrix.cross }}
+        run: cargo build --release --target ${{ matrix.target }} -p speckit
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
