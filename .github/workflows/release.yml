@@ -44,7 +44,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -69,7 +69,7 @@ jobs:
         run: cargo build --release --target ${{ matrix.target }} -p speckit
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: speckit-${{ matrix.platform }}
           path: target/${{ matrix.target }}/release/${{ matrix.binary }}
@@ -81,7 +81,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Get version
         id: version
@@ -114,7 +114,7 @@ jobs:
           fi
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: artifacts
 
@@ -138,7 +138,7 @@ jobs:
           cd ..
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.version.outputs.tag }}
           name: v${{ steps.version.outputs.version }}
@@ -159,12 +159,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: "20"
+          node-version: "24"
           registry-url: "https://registry.npmjs.org"
 
       - name: Get version
@@ -179,7 +179,7 @@ jobs:
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: artifacts
 
@@ -215,6 +215,17 @@ jobs:
           chmod +x npm/speckit-darwin-arm64/speckit
           chmod +x npm/speckit-darwin-x64/speckit
           chmod +x npm/speckit-linux-x64/speckit
+
+      - name: Verify npm auth and scope access
+        run: |
+          echo "npm whoami:"
+          npm whoami
+          echo "---"
+          echo "Can list @speckit packages?"
+          npm access ls-packages @speckit 2>&1 || echo "FAILED to list @speckit"
+          echo "---"
+          echo "Already-published versions of @speckit/darwin-arm64:"
+          npm view @speckit/darwin-arm64 versions --json 2>&1 || echo "FAILED to view @speckit/darwin-arm64"
 
       - name: Publish platform packages
         run: |
