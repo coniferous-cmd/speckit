@@ -391,8 +391,10 @@ impl UpdateCommand {
         // Reconcile: remove stale command files when delivery is skills-only
         if command_generation::should_reconcile_command_files_for_tool(tool_id, delivery) {
             if let Some(adapter) = CommandAdapterRegistry::global().get(tool_id) {
-                let command_dir_name =
-                    adapter.get_file_path("").rsplit_once('/').map(|(dir, _)| dir.to_string());
+                let command_dir_name = adapter
+                    .get_file_path("")
+                    .rsplit_once('/')
+                    .map(|(dir, _)| dir.to_string());
                 if let Some(dir) = command_dir_name {
                     let dir_path = project_path.join(&dir);
                     if dir_path.exists() {
