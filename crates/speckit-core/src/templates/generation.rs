@@ -78,6 +78,76 @@ fn entry(workflow_id: &str, template: super::types::SkillTemplate) -> SkillTempl
     }
 }
 
+/// Command template with workflow ID mapping.
+///
+/// Mirrors OpenSpec's `CommandTemplateEntry` so command generation can
+/// filter by workflow just like skills do.
+#[derive(Debug, Clone)]
+pub struct CommandTemplateEntry {
+    pub template: super::types::CommandTemplate,
+    pub id: String,
+}
+
+/// Returns every canonical Speckit command template, optionally filtered to a
+/// subset of workflow ids.
+///
+/// Mirrors OpenSpec's `getCommandTemplates()` from
+/// `openspec/src/core/shared/skill-generation.ts`.
+pub fn get_command_templates(workflow_filter: Option<&[String]>) -> Vec<CommandTemplateEntry> {
+    let all: Vec<CommandTemplateEntry> = vec![
+        cmd_entry("explore", super::workflows::get_opsx_explore_command_template()),
+        cmd_entry("new", super::workflows::get_opsx_new_command_template()),
+        cmd_entry("continue", super::workflows::get_opsx_continue_command_template()),
+        cmd_entry("apply", super::workflows::get_opsx_apply_command_template()),
+        cmd_entry("update", super::workflows::get_opsx_update_command_template()),
+        cmd_entry("ff", super::workflows::get_opsx_ff_command_template()),
+        cmd_entry("sync", super::workflows::get_opsx_sync_command_template()),
+        cmd_entry("archive", super::workflows::get_opsx_archive_command_template()),
+        cmd_entry("bulk-archive", super::workflows::get_opsx_bulk_archive_command_template()),
+        cmd_entry("verify", super::workflows::get_opsx_verify_command_template()),
+        cmd_entry("onboard", super::workflows::get_opsx_onboard_command_template()),
+        cmd_entry("propose", super::workflows::get_opsx_propose_command_template()),
+    ];
+
+    match workflow_filter {
+        Some(filter) => {
+            let filter_set: std::collections::HashSet<&str> =
+                filter.iter().map(|s| s.as_str()).collect();
+            all.into_iter()
+                .filter(|e| filter_set.contains(e.id.as_str()))
+                .collect()
+        }
+        None => all,
+    }
+}
+
+fn cmd_entry(id: &str, template: super::types::CommandTemplate) -> CommandTemplateEntry {
+    CommandTemplateEntry {
+        template,
+        id: id.to_string(),
+    }
+}
+
+/// Converts command templates into `CommandContent` for the command generator.
+///
+/// Mirrors OpenSpec's `getCommandContents()` from
+/// `openspec/src/core/shared/skill-generation.ts`.
+pub fn get_command_contents(
+    workflow_filter: Option<&[String]>,
+) -> Vec<crate::command_generation::CommandContent> {
+    get_command_templates(workflow_filter)
+        .into_iter()
+        .map(|entry| crate::command_generation::CommandContent {
+            id: entry.id,
+            name: entry.template.name,
+            description: entry.template.description,
+            category: entry.template.category,
+            tags: entry.template.tags,
+            body: entry.template.content,
+        })
+        .collect()
+}
+
 /// Generates skill file content with YAML frontmatter, mirroring
 /// `openspec/src/core/shared/skill-generation.ts:generateSkillContent`.
 ///

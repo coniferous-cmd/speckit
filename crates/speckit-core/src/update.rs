@@ -7,7 +7,9 @@ use anyhow::Result;
 use std::collections::HashSet;
 use std::path::Path;
 
+use crate::command_generation::{self, CommandAdapterRegistry, Delivery as CommandDelivery};
 use crate::config::AI_TOOLS;
+use crate::global_config;
 use crate::legacy_cleanup;
 use crate::migration;
 use crate::profiles::resolve_profile_and_workflow_filter;
@@ -287,60 +289,131 @@ impl UpdateCommand {
             .find(|t| t.value == tool_id)
             .ok_or_else(|| anyhow::anyhow!("Unknown tool: {}", tool_id))?;
 
-        let skills_dir = tool
-            .skills_dir
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Tool {} does not support skills", tool_id))?;
+        // Resolve delivery from global config (mirrors OpenSpec update.ts line 280)
+        let global_cfg = global_config::get_global_config();
+        let delivery = match global_cfg.delivery {
+            global_config::Delivery::Both => CommandDelivery::Both,
+            global_config::Delivery::Skills => CommandDelivery::Skills,
+            global_config::Delivery::Commands => CommandDelivery::Commands,
+        };
 
-        let skills_path = project_path.join(skills_dir).join("skills");
-        std::fs::create_dir_all(&skills_path)?;
+        let should_generate_skills =
+            command_generation::should_generate_skills_for_tool(tool_id, delivery);
+        let should_generate_commands =
+            command_generation::should_generate_commands_for_tool(tool_id, delivery);
 
-        let skill_entries = crate::templates::generation::get_skill_templates(workflow_filter);
-        let generated_by_version = crate::templates::generation::speckit_generated_by_version();
-        let current_version = generated_by_version.clone();
-        let canonical_dirs: std::collections::HashSet<String> =
-            skill_entries.iter().map(|e| e.dir_name.clone()).collect();
+        // --- Skills ---
+        if should_generate_skills {
+            let skills_dir = tool
+                .skills_dir
+                .as_ref()
+                .ok_or_else(|| anyhow::anyhow!("Tool {} does not support skills", tool_id))?;
 
-        for entry in &skill_entries {
-            let skill_dir = skills_path.join(&entry.dir_name);
-            std::fs::create_dir_all(&skill_dir)?;
-            let skill_file = skill_dir.join("SKILL.md");
-            let desired = crate::templates::generation::generate_skill_content(
-                &entry.template,
-                &generated_by_version,
-                None,
-            );
+            let skills_path = project_path.join(skills_dir).join("skills");
+            std::fs::create_dir_all(&skills_path)?;
 
-            let should_write = self.force
-                || !skill_file.exists()
-                || Self::skill_needs_update(&skill_file, &entry.workflow_id, &current_version)?;
+            let skill_entries =
+                crate::templates::generation::get_skill_templates(workflow_filter);
+            let generated_by_version =
+                crate::templates::generation::speckit_generated_by_version();
+            let current_version = generated_by_version.clone();
+            let canonical_dirs: std::collections::HashSet<String> =
+                skill_entries.iter().map(|e| e.dir_name.clone()).collect();
 
-            if should_write {
-                std::fs::write(&skill_file, desired)?;
+            for entry in &skill_entries {
+                let skill_dir = skills_path.join(&entry.dir_name);
+                std::fs::create_dir_all(&skill_dir)?;
+                let skill_file = skill_dir.join("SKILL.md");
+                let desired = crate::templates::generation::generate_skill_content(
+                    &entry.template,
+                    &generated_by_version,
+                    None,
+                );
+
+                let should_write = self.force
+                    || !skill_file.exists()
+                    || Self::skill_needs_update(
+                        &skill_file,
+                        &entry.workflow_id,
+                        &current_version,
+                    )?;
+
+                if should_write {
+                    std::fs::write(&skill_file, desired)?;
+                }
+            }
+
+            // Remove leftover directories from previous registries (e.g. workflow
+            // was removed). Only removes directories whose SKILL.md was generated
+            // by speckit - unmanaged skill dirs are preserved.
+            if let Ok(rd) = std::fs::read_dir(&skills_path) {
+                for dir_entry in rd.flatten() {
+                    let path = dir_entry.path();
+                    if !path.is_dir() {
+                        continue;
+                    }
+                    let Some(dir_name) = path.file_name().and_then(|s| s.to_str()) else {
+                        continue;
+                    };
+                    if canonical_dirs.contains(dir_name) {
+                        continue;
+                    }
+                    let skill_md = path.join("SKILL.md");
+                    if !skill_md.exists() {
+                        continue;
+                    }
+                    if Self::is_managed_skill(&skill_md) {
+                        let _ = std::fs::remove_dir_all(&path);
+                    }
+                }
             }
         }
 
-        // Remove leftover directories from previous registries (e.g. workflow
-        // was removed). Only removes directories whose SKILL.md was generated
-        // by speckit - unmanaged skill dirs are preserved.
-        if let Ok(rd) = std::fs::read_dir(&skills_path) {
-            for dir_entry in rd.flatten() {
-                let path = dir_entry.path();
-                if !path.is_dir() {
-                    continue;
+        // --- Commands (mirrors OpenSpec update.ts lines 290-308) ---
+        if should_generate_commands {
+            if let Some(adapter) = CommandAdapterRegistry::global().get(tool_id) {
+                let command_contents =
+                    crate::templates::generation::get_command_contents(workflow_filter);
+                let generated_commands =
+                    command_generation::generate_commands(&command_contents, adapter);
+                for cmd in &generated_commands {
+                    let command_file = project_path.join(&cmd.path);
+                    if let Some(parent) = command_file.parent() {
+                        std::fs::create_dir_all(parent)?;
+                    }
+                    if self.force || !command_file.exists() {
+                        std::fs::write(&command_file, &cmd.file_content)?;
+                    }
                 }
-                let Some(dir_name) = path.file_name().and_then(|s| s.to_str()) else {
-                    continue;
-                };
-                if canonical_dirs.contains(dir_name) {
-                    continue;
-                }
-                let skill_md = path.join("SKILL.md");
-                if !skill_md.exists() {
-                    continue;
-                }
-                if Self::is_managed_skill(&skill_md) {
-                    let _ = std::fs::remove_dir_all(&path);
+            }
+        }
+
+        // Reconcile: remove stale command files when delivery is skills-only
+        if command_generation::should_reconcile_command_files_for_tool(tool_id, delivery) {
+            if let Some(adapter) = CommandAdapterRegistry::global().get(tool_id) {
+                let command_dir_name =
+                    adapter.get_file_path("").rsplit_once('/').map(|(dir, _)| dir.to_string());
+                if let Some(dir) = command_dir_name {
+                    let dir_path = project_path.join(&dir);
+                    if dir_path.exists() {
+                        let command_contents =
+                            crate::templates::generation::get_command_contents(workflow_filter);
+                        let active_ids: HashSet<&str> =
+                            command_contents.iter().map(|c| c.id.as_str()).collect();
+                        if let Ok(rd) = std::fs::read_dir(&dir_path) {
+                            for entry in rd.flatten() {
+                                let path = entry.path();
+                                if !path.is_file() {
+                                    continue;
+                                }
+                                let file_stem =
+                                    path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+                                if !active_ids.contains(file_stem) {
+                                    let _ = std::fs::remove_file(&path);
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

@@ -8,8 +8,9 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::command_generation::{self, CommandAdapterRegistry, Delivery as CommandDelivery};
 use crate::config::{self, SPECKIT_DIR_NAME};
-use crate::global_config::Profile;
+use crate::global_config::{self, Profile};
 use crate::legacy_cleanup::{self, LegacyDetectionResult};
 use crate::planning_home;
 use crate::profiles;
@@ -396,46 +397,121 @@ impl InitCommand {
     }
 
     /// Generate skills and commands for validated tools.
+    ///
+    /// Mirrors OpenSpec's `generateSkillsAndCommands` from
+    /// `openspec/src/core/init.ts:852-982`. Skills are always generated when
+    /// delivery includes them; commands are generated for adapter-backed tools
+    /// when delivery is `Both` or `Commands`.
     fn generate_skills_and_commands(
         &self,
-        _project_path: &Path,
+        project_path: &Path,
         tools: &[ValidatedInitTool],
         workflow_filter: Option<&[String]>,
     ) -> Result<GenerationResults> {
         let mut results = GenerationResults::default();
 
+        // Resolve delivery from global config (mirrors OpenSpec line 877)
+        let global_cfg = global_config::get_global_config();
+        let delivery = match global_cfg.delivery {
+            global_config::Delivery::Both => CommandDelivery::Both,
+            global_config::Delivery::Skills => CommandDelivery::Skills,
+            global_config::Delivery::Commands => CommandDelivery::Commands,
+        };
+        let delivery_includes_commands = delivery != CommandDelivery::Skills;
+
+        // Pre-fetch command contents once for all tools (mirrors OpenSpec line 882)
+        let command_contents =
+            if delivery_includes_commands {
+                crate::templates::generation::get_command_contents(workflow_filter)
+            } else {
+                Vec::new()
+            };
+
         for tool in tools {
             println!("Setting up {}...", tool.name);
 
-            // Create the skills directory
-            fs::create_dir_all(&tool.skills_path).with_context(|| {
-                format!(
-                    "Failed to create skills directory: {}",
-                    tool.skills_path.display()
-                )
-            })?;
+            let should_generate_skills =
+                command_generation::should_generate_skills_for_tool(&tool.value, delivery);
+            let should_generate_commands =
+                command_generation::should_generate_commands_for_tool(&tool.value, delivery);
 
-            // Generate skill files from the unified canonical generator.
-            // The workflow filter is the profile's active workflows; when no
-            // profile override is supplied this falls back to all 12 default
-            // workflows, matching OpenSpec's default registry. `init` and
-            // `update` both consume `templates::generation::get_skill_templates`
-            // so they can never drift on which skills exist or what their
-            // frontmatter looks like.
-            let skill_entries = crate::templates::generation::get_skill_templates(workflow_filter);
-            let generated_by_version = crate::templates::generation::speckit_generated_by_version();
-            for entry in &skill_entries {
-                let skill_dir = tool.skills_path.join(&entry.dir_name);
-                fs::create_dir_all(&skill_dir)?;
+            // --- Skills ---
+            if should_generate_skills {
+                fs::create_dir_all(&tool.skills_path).with_context(|| {
+                    format!(
+                        "Failed to create skills directory: {}",
+                        tool.skills_path.display()
+                    )
+                })?;
 
-                let skill_file = skill_dir.join("SKILL.md");
-                let content = crate::templates::generation::generate_skill_content(
-                    &entry.template,
-                    &generated_by_version,
-                    None,
-                );
-                if !skill_file.exists() || self.force {
-                    fs::write(&skill_file, content)?;
+                let skill_entries =
+                    crate::templates::generation::get_skill_templates(workflow_filter);
+                let generated_by_version =
+                    crate::templates::generation::speckit_generated_by_version();
+                for entry in &skill_entries {
+                    let skill_dir = tool.skills_path.join(&entry.dir_name);
+                    fs::create_dir_all(&skill_dir)?;
+
+                    let skill_file = skill_dir.join("SKILL.md");
+                    let content = crate::templates::generation::generate_skill_content(
+                        &entry.template,
+                        &generated_by_version,
+                        None,
+                    );
+                    if !skill_file.exists() || self.force {
+                        fs::write(&skill_file, content)?;
+                    }
+                }
+            }
+
+            // --- Commands (mirrors OpenSpec lines 922-938) ---
+            if should_generate_commands {
+                if let Some(adapter) = CommandAdapterRegistry::global().get(&tool.value) {
+                    let generated_commands =
+                        command_generation::generate_commands(&command_contents, adapter);
+                    for cmd in &generated_commands {
+                        let command_file = project_path.join(&cmd.path);
+                        if let Some(parent) = command_file.parent() {
+                            fs::create_dir_all(parent)?;
+                        }
+                        if !command_file.exists() || self.force {
+                            fs::write(&command_file, &cmd.file_content)?;
+                        }
+                    }
+                }
+            } else if delivery_includes_commands {
+                // Track skipped tools (mirrors OpenSpec lines 933-939)
+                let capability =
+                    command_generation::resolve_command_surface_capability(&tool.value);
+                if capability == command_generation::CommandSurfaceCapability::SkillsInvocable {
+                    results.skills_invocable_command_skips.push(tool.value.clone());
+                } else {
+                    results.commands_skipped.push(tool.value.clone());
+                }
+            }
+
+            // Reconcile: remove stale command files when delivery is skills-only
+            if command_generation::should_reconcile_command_files_for_tool(&tool.value, delivery) {
+                if let Some(adapter) = CommandAdapterRegistry::global().get(&tool.value) {
+                    let command_dir_name = adapter.get_file_path("").rsplit_once('/').map(|(dir, _)| dir.to_string());
+                    if let Some(dir) = command_dir_name {
+                        let dir_path = project_path.join(&dir);
+                        if dir_path.exists() {
+                            // Remove command files that are no longer in the workflow set
+                            let active_ids: HashSet<&str> = command_contents.iter().map(|c| c.id.as_str()).collect();
+                            if let Ok(rd) = fs::read_dir(&dir_path) {
+                                for entry in rd.flatten() {
+                                    let path = entry.path();
+                                    if !path.is_file() { continue; }
+                                    let file_stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+                                    if !active_ids.contains(file_stem) {
+                                        let _ = fs::remove_file(&path);
+                                        results.removed_command_count += 1;
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
 

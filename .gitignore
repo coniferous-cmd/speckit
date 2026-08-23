@@ -18,6 +18,7 @@ Thumbs.db
 .env
 .env.*
 *.log
+.npmrc
 
 # Build artifacts / Temp
 dist/
