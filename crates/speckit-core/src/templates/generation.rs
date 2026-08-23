@@ -95,18 +95,42 @@ pub struct CommandTemplateEntry {
 /// `openspec/src/core/shared/skill-generation.ts`.
 pub fn get_command_templates(workflow_filter: Option<&[String]>) -> Vec<CommandTemplateEntry> {
     let all: Vec<CommandTemplateEntry> = vec![
-        cmd_entry("explore", super::workflows::get_opsx_explore_command_template()),
+        cmd_entry(
+            "explore",
+            super::workflows::get_opsx_explore_command_template(),
+        ),
         cmd_entry("new", super::workflows::get_opsx_new_command_template()),
-        cmd_entry("continue", super::workflows::get_opsx_continue_command_template()),
+        cmd_entry(
+            "continue",
+            super::workflows::get_opsx_continue_command_template(),
+        ),
         cmd_entry("apply", super::workflows::get_opsx_apply_command_template()),
-        cmd_entry("update", super::workflows::get_opsx_update_command_template()),
+        cmd_entry(
+            "update",
+            super::workflows::get_opsx_update_command_template(),
+        ),
         cmd_entry("ff", super::workflows::get_opsx_ff_command_template()),
         cmd_entry("sync", super::workflows::get_opsx_sync_command_template()),
-        cmd_entry("archive", super::workflows::get_opsx_archive_command_template()),
-        cmd_entry("bulk-archive", super::workflows::get_opsx_bulk_archive_command_template()),
-        cmd_entry("verify", super::workflows::get_opsx_verify_command_template()),
-        cmd_entry("onboard", super::workflows::get_opsx_onboard_command_template()),
-        cmd_entry("propose", super::workflows::get_opsx_propose_command_template()),
+        cmd_entry(
+            "archive",
+            super::workflows::get_opsx_archive_command_template(),
+        ),
+        cmd_entry(
+            "bulk-archive",
+            super::workflows::get_opsx_bulk_archive_command_template(),
+        ),
+        cmd_entry(
+            "verify",
+            super::workflows::get_opsx_verify_command_template(),
+        ),
+        cmd_entry(
+            "onboard",
+            super::workflows::get_opsx_onboard_command_template(),
+        ),
+        cmd_entry(
+            "propose",
+            super::workflows::get_opsx_propose_command_template(),
+        ),
     ];
 
     match workflow_filter {

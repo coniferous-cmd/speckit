@@ -312,10 +312,8 @@ impl UpdateCommand {
             let skills_path = project_path.join(skills_dir).join("skills");
             std::fs::create_dir_all(&skills_path)?;
 
-            let skill_entries =
-                crate::templates::generation::get_skill_templates(workflow_filter);
-            let generated_by_version =
-                crate::templates::generation::speckit_generated_by_version();
+            let skill_entries = crate::templates::generation::get_skill_templates(workflow_filter);
+            let generated_by_version = crate::templates::generation::speckit_generated_by_version();
             let current_version = generated_by_version.clone();
             let canonical_dirs: std::collections::HashSet<String> =
                 skill_entries.iter().map(|e| e.dir_name.clone()).collect();
@@ -332,11 +330,7 @@ impl UpdateCommand {
 
                 let should_write = self.force
                     || !skill_file.exists()
-                    || Self::skill_needs_update(
-                        &skill_file,
-                        &entry.workflow_id,
-                        &current_version,
-                    )?;
+                    || Self::skill_needs_update(&skill_file, &entry.workflow_id, &current_version)?;
 
                 if should_write {
                     std::fs::write(&skill_file, desired)?;

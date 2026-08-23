@@ -420,12 +420,11 @@ impl InitCommand {
         let delivery_includes_commands = delivery != CommandDelivery::Skills;
 
         // Pre-fetch command contents once for all tools (mirrors OpenSpec line 882)
-        let command_contents =
-            if delivery_includes_commands {
-                crate::templates::generation::get_command_contents(workflow_filter)
-            } else {
-                Vec::new()
-            };
+        let command_contents = if delivery_includes_commands {
+            crate::templates::generation::get_command_contents(workflow_filter)
+        } else {
+            Vec::new()
+        };
 
         for tool in tools {
             println!("Setting up {}...", tool.name);
@@ -484,7 +483,9 @@ impl InitCommand {
                 let capability =
                     command_generation::resolve_command_surface_capability(&tool.value);
                 if capability == command_generation::CommandSurfaceCapability::SkillsInvocable {
-                    results.skills_invocable_command_skips.push(tool.value.clone());
+                    results
+                        .skills_invocable_command_skips
+                        .push(tool.value.clone());
                 } else {
                     results.commands_skipped.push(tool.value.clone());
                 }
@@ -493,17 +494,24 @@ impl InitCommand {
             // Reconcile: remove stale command files when delivery is skills-only
             if command_generation::should_reconcile_command_files_for_tool(&tool.value, delivery) {
                 if let Some(adapter) = CommandAdapterRegistry::global().get(&tool.value) {
-                    let command_dir_name = adapter.get_file_path("").rsplit_once('/').map(|(dir, _)| dir.to_string());
+                    let command_dir_name = adapter
+                        .get_file_path("")
+                        .rsplit_once('/')
+                        .map(|(dir, _)| dir.to_string());
                     if let Some(dir) = command_dir_name {
                         let dir_path = project_path.join(&dir);
                         if dir_path.exists() {
                             // Remove command files that are no longer in the workflow set
-                            let active_ids: HashSet<&str> = command_contents.iter().map(|c| c.id.as_str()).collect();
+                            let active_ids: HashSet<&str> =
+                                command_contents.iter().map(|c| c.id.as_str()).collect();
                             if let Ok(rd) = fs::read_dir(&dir_path) {
                                 for entry in rd.flatten() {
                                     let path = entry.path();
-                                    if !path.is_file() { continue; }
-                                    let file_stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+                                    if !path.is_file() {
+                                        continue;
+                                    }
+                                    let file_stem =
+                                        path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
                                     if !active_ids.contains(file_stem) {
                                         let _ = fs::remove_file(&path);
                                         results.removed_command_count += 1;
