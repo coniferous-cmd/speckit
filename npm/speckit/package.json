@@ -1,11 +1,11 @@
 {
-  "name": "speckit",
+  "name": "@coniferous-cmd/speckit",
   "version": "1.9.0",
   "description": "AI-native system for spec-driven development",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Fission-AI/Speckit.git",
+    "url": "https://github.com/coniferous-cmd/speckit.git",
     "directory": "npm/speckit"
   },
   "bin": {
@@ -15,10 +15,10 @@
     "postinstall": "node lib/install.js"
   },
   "optionalDependencies": {
-    "@speckit/darwin-arm64": "1.9.0",
-    "@speckit/darwin-x64": "1.9.0",
-    "@speckit/linux-x64": "1.9.0",
-    "@speckit/win32-x64": "1.9.0"
+    "@coniferous-cmd/speckit-darwin-arm64": "1.9.0",
+    "@coniferous-cmd/speckit-darwin-x64": "1.9.0",
+    "@coniferous-cmd/speckit-linux-x64": "1.9.0",
+    "@coniferous-cmd/speckit-win32-x64": "1.9.0"
   },
   "engines": {
     "node": ">=14"

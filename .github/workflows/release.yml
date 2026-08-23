@@ -198,10 +198,10 @@ jobs:
           # Update optionalDependencies versions in main package
           cd npm/speckit
           jq --arg v "$VERSION" '
-            .optionalDependencies["@speckit/darwin-arm64"] = $v |
-            .optionalDependencies["@speckit/darwin-x64"] = $v |
-            .optionalDependencies["@speckit/linux-x64"] = $v |
-            .optionalDependencies["@speckit/win32-x64"] = $v
+            .optionalDependencies["@coniferous-cmd/speckit-darwin-arm64"] = $v |
+            .optionalDependencies["@coniferous-cmd/speckit-darwin-x64"] = $v |
+            .optionalDependencies["@coniferous-cmd/speckit-linux-x64"] = $v |
+            .optionalDependencies["@coniferous-cmd/speckit-win32-x64"] = $v
           ' package.json > tmp.json && mv tmp.json package.json
           cd ../..
 
@@ -221,17 +221,17 @@ jobs:
           echo "npm whoami:"
           npm whoami
           echo "---"
-          echo "Can list @speckit packages?"
-          npm access ls-packages @speckit 2>&1 || echo "FAILED to list @speckit"
+          echo "Can list @coniferous-cmd packages?"
+          npm access ls-packages @coniferous-cmd 2>&1 || echo "FAILED to list @coniferous-cmd"
           echo "---"
-          echo "Already-published versions of @speckit/darwin-arm64:"
-          npm view @speckit/darwin-arm64 versions --json 2>&1 || echo "FAILED to view @speckit/darwin-arm64"
+          echo "Already-published versions of @coniferous-cmd/speckit-darwin-arm64:"
+          npm view @coniferous-cmd/speckit-darwin-arm64 versions --json 2>&1 || echo "FAILED to view @coniferous-cmd/speckit-darwin-arm64"
 
       - name: Publish platform packages
         run: |
           cd npm
           for pkg in speckit-darwin-arm64 speckit-darwin-x64 speckit-linux-x64 speckit-win32-x64; do
-            echo "Publishing @speckit/$pkg..."
+            echo "Publishing @coniferous-cmd/$pkg..."
             npm publish "./$pkg" --access public
           done
         env:

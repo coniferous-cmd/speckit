@@ -5,10 +5,10 @@ const path = require("path");
 
 // Platform and architecture mapping
 const PLATFORM_PACKAGES = {
-  "darwin-arm64": "@speckit/darwin-arm64",
-  "darwin-x64": "@speckit/darwin-x64",
-  "linux-x64": "@speckit/linux-x64",
-  "win32-x64": "@speckit/win32-x64",
+  "darwin-arm64": "@coniferous-cmd/speckit-darwin-arm64",
+  "darwin-x64": "@coniferous-cmd/speckit-darwin-x64",
+  "linux-x64": "@coniferous-cmd/speckit-linux-x64",
+  "win32-x64": "@coniferous-cmd/speckit-win32-x64",
 };
 
 function getPlatformPackage() {
