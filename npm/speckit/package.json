@@ -18,7 +18,6 @@
     "@speckit/darwin-arm64": "1.9.0",
     "@speckit/darwin-x64": "1.9.0",
     "@speckit/linux-x64": "1.9.0",
-    "@speckit/linux-arm64": "1.9.0",
     "@speckit/win32-x64": "1.9.0"
   },
   "engines": {

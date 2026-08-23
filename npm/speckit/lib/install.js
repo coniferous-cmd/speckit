@@ -8,7 +8,6 @@ const PLATFORM_PACKAGES = {
   "darwin-arm64": "@speckit/darwin-arm64",
   "darwin-x64": "@speckit/darwin-x64",
   "linux-x64": "@speckit/linux-x64",
-  "linux-arm64": "@speckit/linux-arm64",
   "win32-x64": "@speckit/win32-x64",
 };
 

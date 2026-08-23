@@ -29,11 +29,6 @@ jobs:
             os: ubuntu-latest
             platform: linux-x64
             binary: speckit
-          - target: aarch64-unknown-linux-gnu
-            os: ubuntu-latest
-            platform: linux-arm64
-            binary: speckit
-            cross: true
           - target: x86_64-apple-darwin
             os: macos-latest
             platform: darwin-x64
@@ -131,9 +126,6 @@ jobs:
           # Linux x64
           tar -czf ../release/speckit-linux-x64.tar.gz -C speckit-linux-x64 speckit
 
-          # Linux arm64
-          tar -czf ../release/speckit-linux-arm64.tar.gz -C speckit-linux-arm64 speckit
-
           # macOS x64
           tar -czf ../release/speckit-darwin-x64.tar.gz -C speckit-darwin-x64 speckit
 
@@ -155,7 +147,6 @@ jobs:
           generate_release_notes: true
           files: |
             release/speckit-linux-x64.tar.gz
-            release/speckit-linux-arm64.tar.gz
             release/speckit-darwin-x64.tar.gz
             release/speckit-darwin-arm64.tar.gz
             release/speckit-win32-x64.zip
@@ -210,7 +201,6 @@ jobs:
             .optionalDependencies["@speckit/darwin-arm64"] = $v |
             .optionalDependencies["@speckit/darwin-x64"] = $v |
             .optionalDependencies["@speckit/linux-x64"] = $v |
-            .optionalDependencies["@speckit/linux-arm64"] = $v |
             .optionalDependencies["@speckit/win32-x64"] = $v
           ' package.json > tmp.json && mv tmp.json package.json
           cd ../..
@@ -219,19 +209,17 @@ jobs:
           cp artifacts/speckit-darwin-arm64/speckit npm/speckit-darwin-arm64/
           cp artifacts/speckit-darwin-x64/speckit npm/speckit-darwin-x64/
           cp artifacts/speckit-linux-x64/speckit npm/speckit-linux-x64/
-          cp artifacts/speckit-linux-arm64/speckit npm/speckit-linux-arm64/
           cp artifacts/speckit-win32-x64/speckit.exe npm/speckit-win32-x64/
 
           # Make binaries executable
           chmod +x npm/speckit-darwin-arm64/speckit
           chmod +x npm/speckit-darwin-x64/speckit
           chmod +x npm/speckit-linux-x64/speckit
-          chmod +x npm/speckit-linux-arm64/speckit
 
       - name: Publish platform packages
         run: |
           cd npm
-          for pkg in speckit-darwin-arm64 speckit-darwin-x64 speckit-linux-x64 speckit-linux-arm64 speckit-win32-x64; do
+          for pkg in speckit-darwin-arm64 speckit-darwin-x64 speckit-linux-x64 speckit-win32-x64; do
             echo "Publishing @speckit/$pkg..."
             npm publish "./$pkg" --access public
           done
