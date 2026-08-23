@@ -45,8 +45,7 @@ fn is_closing_fence(line: &str, active_fence: &ActiveFence) -> bool {
 /// Build a per-line mask where `true` marks a line that is part of a fenced
 /// code block (including the opening and closing fence lines themselves).
 ///
-/// Speckit follows the OpenSpec convention: **nested fences are not
-/// supported**.  Once a fence has been opened and closed, no further
+/// Speckit does not support **nested fences**. Once a fence has been opened and closed, no further
 /// fence-style lines are recognised; any subsequent line that looks like a
 /// fence opener stays unmarked.  The motivation is to keep fence scanning
 /// O(n) and side-effect free so downstream parsers never have to think
@@ -58,7 +57,7 @@ pub fn build_code_fence_mask(lines: &[String]) -> Vec<bool> {
     let mut active_fence: Option<ActiveFence> = None;
     // Tracks whether a fence has ever been opened in this document.  Nested
     // fence openers are ignored once any fence has been closed, which keeps
-    // the mask simple and matches OpenSpec.
+    // the mask simple.
     let mut fence_seen = false;
 
     for (i, line) in lines.iter().enumerate() {

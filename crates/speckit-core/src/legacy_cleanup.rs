@@ -7,7 +7,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::config::OPENSPEC_MARKERS;
+use crate::config::SPECKIT_MARKERS;
 
 /// Legacy config file names from the old ToolRegistry.
 pub const LEGACY_CONFIG_FILES: &[&str] = &[
@@ -95,18 +95,18 @@ pub fn get_codex_prompt_dir() -> PathBuf {
 
 /// Checks if content contains Speckit markers.
 pub fn has_speckit_markers(content: &str) -> bool {
-    content.contains(OPENSPEC_MARKERS.start) && content.contains(OPENSPEC_MARKERS.end)
+    content.contains(SPECKIT_MARKERS.start) && content.contains(SPECKIT_MARKERS.end)
 }
 
 /// Checks if file content is 100% Speckit content.
 pub fn is_only_speckit_content(content: &str) -> bool {
-    let start_idx = content.find(OPENSPEC_MARKERS.start);
-    let end_idx = content.find(OPENSPEC_MARKERS.end);
+    let start_idx = content.find(SPECKIT_MARKERS.start);
+    let end_idx = content.find(SPECKIT_MARKERS.end);
 
     match (start_idx, end_idx) {
         (Some(s), Some(e)) if e > s => {
             let before = &content[..s];
-            let after = &content[e + OPENSPEC_MARKERS.end.len()..];
+            let after = &content[e + SPECKIT_MARKERS.end.len()..];
             before.trim().is_empty() && after.trim().is_empty()
         }
         _ => false,
@@ -115,12 +115,12 @@ pub fn is_only_speckit_content(content: &str) -> bool {
 
 /// Removes the Speckit marker block from file content.
 pub fn remove_marker_block(content: &str) -> String {
-    let start_idx = match content.find(OPENSPEC_MARKERS.start) {
+    let start_idx = match content.find(SPECKIT_MARKERS.start) {
         Some(idx) => idx,
         None => return content.to_string(),
     };
-    let end_marker_end = match content.find(OPENSPEC_MARKERS.end) {
-        Some(idx) => idx + OPENSPEC_MARKERS.end.len(),
+    let end_marker_end = match content.find(SPECKIT_MARKERS.end) {
+        Some(idx) => idx + SPECKIT_MARKERS.end.len(),
         None => return content.to_string(),
     };
 

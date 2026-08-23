@@ -110,7 +110,7 @@ fn can_animate() -> bool {
     }
 
     // Manual override.
-    if std::env::var("OPENSPEC_NO_ANIMATION").is_ok() {
+    if std::env::var("SPECKIT_NO_ANIMATION").is_ok() {
         return false;
     }
 

@@ -14,7 +14,7 @@ use crate::references::{self, ReferenceIndexEntry, StoreDiagnostic};
 const ROLE_REFERENCED_STORE: &str = "referenced_store";
 
 /// Role assigned to the root entry of a working set.
-const ROLE_OPENSPEC_ROOT: &str = "speckit_root";
+const ROLE_SPECKIT_ROOT: &str = "speckit_root";
 
 /// A single member of a working set -- one referenced store.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -103,7 +103,7 @@ pub fn assemble_working_set(
             path: root_path.to_string(),
             source: root_source.to_string(),
             store_id: store_id.map(|s| s.to_string()),
-            role: ROLE_OPENSPEC_ROOT.to_string(),
+            role: ROLE_SPECKIT_ROOT.to_string(),
         },
         members,
         status,

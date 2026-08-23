@@ -27,3 +27,4 @@ tmp/
 *.tmp
 
 .claude
+/.mcp.json

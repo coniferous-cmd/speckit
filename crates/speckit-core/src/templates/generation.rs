@@ -3,18 +3,15 @@
 //! This module is the single canonical source for skill templates and the
 //! `SKILL.md` content emitted to disk. `init`, `update`, profile sync, and
 //! migration all consume it; nothing else should hand-roll frontmatter or
-//! duplicate the workflow list. The shape mirrors `openspec/src/core/shared/skill-generation.ts`
-//! so the two implementations stay structurally aligned: every OpenSpec
-//! workflow has exactly one Speckit counterpart, and brand substitution
-//! (`openspec` -> `speckit`, `OpenSpec` -> `Speckit`) is the only content delta.
+//! duplicate the workflow list. Every workflow has exactly one canonical
+//! Speckit template.
 
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 
 /// Skill template with directory name and workflow ID mapping.
 ///
-/// Mirrors OpenSpec's `SkillTemplateEntry` so parity tests can compare one entry
-/// at a time.
+/// A skill template entry used by generation and parity tests.
 #[derive(Debug, Clone)]
 pub struct SkillTemplateEntry {
     pub template: super::types::SkillTemplate,
@@ -25,7 +22,7 @@ pub struct SkillTemplateEntry {
 /// Returns every canonical Speckit skill template, optionally filtered to a
 /// subset of workflow ids.
 ///
-/// The default (no filter) set is the 12 OpenSpec workflows. Filter values come
+/// The default (no filter) set is the 12 Speckit workflows. Filter values come
 /// from `migration::ALL_WORKFLOWS` (and must be `String` to keep the public API
 /// flexible across profile/CLI layers).
 pub fn get_skill_templates(workflow_filter: Option<&[String]>) -> Vec<SkillTemplateEntry> {
@@ -80,8 +77,7 @@ fn entry(workflow_id: &str, template: super::types::SkillTemplate) -> SkillTempl
 
 /// Command template with workflow ID mapping.
 ///
-/// Mirrors OpenSpec's `CommandTemplateEntry` so command generation can
-/// filter by workflow just like skills do.
+/// A command template entry that command generation can filter by workflow.
 #[derive(Debug, Clone)]
 pub struct CommandTemplateEntry {
     pub template: super::types::CommandTemplate,
@@ -91,8 +87,7 @@ pub struct CommandTemplateEntry {
 /// Returns every canonical Speckit command template, optionally filtered to a
 /// subset of workflow ids.
 ///
-/// Mirrors OpenSpec's `getCommandTemplates()` from
-/// `openspec/src/core/shared/skill-generation.ts`.
+/// Returns the command templates for the requested workflows.
 pub fn get_command_templates(workflow_filter: Option<&[String]>) -> Vec<CommandTemplateEntry> {
     let all: Vec<CommandTemplateEntry> = vec![
         cmd_entry(
@@ -154,8 +149,7 @@ fn cmd_entry(id: &str, template: super::types::CommandTemplate) -> CommandTempla
 
 /// Converts command templates into `CommandContent` for the command generator.
 ///
-/// Mirrors OpenSpec's `getCommandContents()` from
-/// `openspec/src/core/shared/skill-generation.ts`.
+/// Returns rendered command contents for the requested workflows.
 pub fn get_command_contents(
     workflow_filter: Option<&[String]>,
 ) -> Vec<crate::command_generation::CommandContent> {
@@ -172,8 +166,7 @@ pub fn get_command_contents(
         .collect()
 }
 
-/// Generates skill file content with YAML frontmatter, mirroring
-/// `openspec/src/core/shared/skill-generation.ts:generateSkillContent`.
+/// Generates skill file content with YAML frontmatter from canonical templates.
 ///
 /// `generated_by_version` is embedded as `metadata.generatedBy` so the version
 /// that produced the file can be detected later (used by update to decide
@@ -234,8 +227,8 @@ pub fn generate_skill_content(
 
 /// The `allowed-tools` frontmatter value emitted by Speckit.
 ///
-/// Mirrors `OPENSPEC_CLI_ALLOWED_TOOLS` in OpenSpec so the field is recognized
-/// by Claude Code and other Agent-Skills-aware tools as the CLI allowlist.
+/// Defines the CLI allowlist recognized by Claude Code and other
+/// Agent-Skills-aware tools.
 pub const SPECKIT_CLI_ALLOWED_TOOLS: &str = "Bash(speckit:*)";
 
 /// Returns the current Speckit version, suitable for embedding in
@@ -251,8 +244,7 @@ pub fn speckit_generated_by_version() -> String {
 /// Escape a string for safe inclusion inside double-quoted YAML scalars.
 ///
 /// Only used for `generatedBy` (which is always a SemVer string) but kept
-/// defensive in case that ever changes. Mirrors the safe-subset handling in
-/// OpenSpec's `generateSkillContent`.
+/// defensive in case that ever changes.
 fn escape_yaml_string(input: &str) -> String {
     input
         .replace('\\', "\\\\")
@@ -343,10 +335,7 @@ fn split_kv(line: &str) -> Option<(&str, &str)> {
 
 /// Normalize a generated skill file body for hash comparison.
 ///
-/// Applies the documented brand substitutions and whitespace normalisation so the
-/// SHA-256 hash of the normalised content is identical across OpenSpec and Speckit
-/// for the same workflow. Mirrors `stableStringify` + `hash` in OpenSpec's
-/// `regen-parity-hashes.mjs`.
+/// Applies whitespace normalisation before calculating a SHA-256 hash.
 pub fn normalize_for_parity(content: &str) -> String {
     // Strip trailing whitespace from every line.
     let stripped: String = content
@@ -382,19 +371,14 @@ pub fn parity_hash(content: &str) -> String {
 
 /// Baseline version string used when computing fixture hashes.
 ///
-/// Must match the `PARITY_BASELINE` constant in OpenSpec's
-/// `regen-parity-hashes.mjs` so both codebases produce identical hashes for the
-/// same template content.
+/// Used to produce deterministic hashes for the same template content.
 pub const PARITY_BASELINE_VERSION: &str = "PARITY-BASELINE";
 
 /// Fixture hashes for the 12 canonical skill file contents.
 ///
 /// Each entry maps a skill directory name to the SHA-256 hex digest of that
 /// skill's generated file content when rendered with `PARITY_BASELINE_VERSION`
-/// as the `generatedBy` value. These are the Speckit counterparts to
-/// `EXPECTED_GENERATED_SKILL_CONTENT_HASHES` in OpenSpec's
-/// `test/core/templates/skill-templates-parity.test.ts`; the keys are the
-/// `speckit-*` equivalents of OpenSpec's `openspec-*` names.
+/// as the `generatedBy` value.
 ///
 /// These values are produced by running `regen-parity-hashes.mjs` against the
 /// current source. When a workflow template is intentionally changed, update
@@ -504,11 +488,6 @@ mod tests {
             assert!(
                 entry.dir_name.starts_with("speckit-"),
                 "dir {} should start with speckit-",
-                entry.dir_name
-            );
-            assert!(
-                !entry.dir_name.contains("openspec"),
-                "dir {} should not contain openspec",
                 entry.dir_name
             );
         }

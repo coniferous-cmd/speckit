@@ -398,9 +398,8 @@ impl InitCommand {
 
     /// Generate skills and commands for validated tools.
     ///
-    /// Mirrors OpenSpec's `generateSkillsAndCommands` from
-    /// `openspec/src/core/init.ts:852-982`. Skills are always generated when
-    /// delivery includes them; commands are generated for adapter-backed tools
+    /// Skills are always generated when delivery includes them; commands are
+    /// generated for adapter-backed tools
     /// when delivery is `Both` or `Commands`.
     fn generate_skills_and_commands(
         &self,
@@ -410,7 +409,7 @@ impl InitCommand {
     ) -> Result<GenerationResults> {
         let mut results = GenerationResults::default();
 
-        // Resolve delivery from global config (mirrors OpenSpec line 877)
+        // Resolve delivery from global config.
         let global_cfg = global_config::get_global_config();
         let delivery = match global_cfg.delivery {
             global_config::Delivery::Both => CommandDelivery::Both,
@@ -419,7 +418,7 @@ impl InitCommand {
         };
         let delivery_includes_commands = delivery != CommandDelivery::Skills;
 
-        // Pre-fetch command contents once for all tools (mirrors OpenSpec line 882)
+        // Pre-fetch command contents once for all tools.
         let command_contents = if delivery_includes_commands {
             crate::templates::generation::get_command_contents(workflow_filter)
         } else {
@@ -463,7 +462,7 @@ impl InitCommand {
                 }
             }
 
-            // --- Commands (mirrors OpenSpec lines 922-938) ---
+            // --- Commands ---
             if should_generate_commands {
                 if let Some(adapter) = CommandAdapterRegistry::global().get(&tool.value) {
                     let generated_commands =
@@ -479,7 +478,7 @@ impl InitCommand {
                     }
                 }
             } else if delivery_includes_commands {
-                // Track skipped tools (mirrors OpenSpec lines 933-939)
+                // Track skipped tools.
                 let capability =
                     command_generation::resolve_command_surface_capability(&tool.value);
                 if capability == command_generation::CommandSurfaceCapability::SkillsInvocable {
@@ -562,7 +561,7 @@ impl InitCommand {
 
         // A custom profile may declare workflows in the project config. The
         // shared resolver already handles global workflows; project values
-        // take precedence for init as OpenSpec does.
+        // take precedence for init.
         if override_profile == Some(Profile::Custom)
             && let Ok(value) = std::fs::read_to_string(project_path.join("speckit/config.yaml"))
             && let Ok(yaml) = serde_yaml::from_str::<serde_yaml::Value>(&value)

@@ -289,7 +289,7 @@ impl UpdateCommand {
             .find(|t| t.value == tool_id)
             .ok_or_else(|| anyhow::anyhow!("Unknown tool: {}", tool_id))?;
 
-        // Resolve delivery from global config (mirrors OpenSpec update.ts line 280)
+        // Resolve delivery from global config.
         let global_cfg = global_config::get_global_config();
         let delivery = match global_cfg.delivery {
             global_config::Delivery::Both => CommandDelivery::Both,
@@ -363,7 +363,7 @@ impl UpdateCommand {
             }
         }
 
-        // --- Commands (mirrors OpenSpec update.ts lines 290-308) ---
+        // --- Commands ---
         if should_generate_commands {
             if let Some(adapter) = CommandAdapterRegistry::global().get(tool_id) {
                 let command_contents =

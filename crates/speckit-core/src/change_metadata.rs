@@ -7,7 +7,7 @@ pub const METADATA_FILENAME: &str = ".speckit.yaml";
 
 /// Change metadata stored in .speckit.yaml.
 ///
-/// `retire_capabilities` is a boolean to mirror OpenSpec's schema.  A list
+/// `retire_capabilities` is a boolean. A list
 /// value is tolerated as a legacy alias for `true` so older `.speckit.yaml`
 /// files keep working.  An unrecognized string value produces an error rather
 /// than silently defaulting to `false`.
@@ -38,7 +38,7 @@ pub struct ChangeMetadata {
 /// - missing / null (defaults to `false`)
 /// - the string `"true"` / `"yes"` / `"1"` (case-insensitive) → `true`
 /// - the string `"false"` / `"no"` / `"0"` / `""` → `false`
-/// - any other string → error (per OpenSpec: no silent defaults)
+/// - any other string → error (no silent defaults)
 fn deserialize_retire_capabilities<'de, D>(deserializer: D) -> Result<bool, D::Error>
 where
     D: serde::Deserializer<'de>,

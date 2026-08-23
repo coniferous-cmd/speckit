@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 const PACKAGE_NAME: &str = "@fission-ai/speckit";
 
 /// Version of this CLI.
-const OPENSPEC_VERSION: &str = env!("CARGO_PKG_VERSION");
+const SPECKIT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Safe version pattern: SemVer only.
 fn is_safe_version(version: &str) -> bool {
@@ -99,7 +99,7 @@ fn compare_prerelease(a: &str, b: &str) -> i32 {
 
 /// Check if the update check is enabled.
 fn is_check_enabled() -> bool {
-    if std::env::var("OPENSPEC_NO_UPDATE_CHECK").is_ok() {
+    if std::env::var("SPECKIT_NO_UPDATE_CHECK").is_ok() {
         return false;
     }
     if std::env::var("DO_NOT_TRACK").as_deref() == Ok("1") {
@@ -124,7 +124,7 @@ pub fn get_available_cli_update() -> Option<String> {
     }
 
     let latest = fetch_latest_version()?;
-    if compare_versions(&latest, OPENSPEC_VERSION) > 0 {
+    if compare_versions(&latest, SPECKIT_VERSION) > 0 {
         Some(latest)
     } else {
         None
@@ -187,7 +187,7 @@ pub fn should_offer_upgrade(
 pub fn build_cli_update_lines(latest_version: &str, install_dir: Option<&Path>) -> Vec<String> {
     let mut lines = vec![format!(
         "A newer Speckit CLI is available (v{} -> v{}).",
-        OPENSPEC_VERSION, latest_version
+        SPECKIT_VERSION, latest_version
     )];
 
     if let Some(dir) = install_dir {

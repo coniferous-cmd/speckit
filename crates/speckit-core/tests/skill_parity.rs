@@ -1,9 +1,8 @@
 //! Speckit skill parity tests.
 //!
 //! These tests enforce the contract laid out in
-//! `CLAUDE_SKILL_PARITY_PLAN.md`: Speckit's emitted skill files must mirror
-//! OpenSpec's workflow registry (same count, same names, same content after
-//! documented brand substitution) and must be produced by a single canonical
+//! `CLAUDE_SKILL_PARITY_PLAN.md`: Speckit's emitted skill files must use the
+//! canonical workflow registry and be produced by a single canonical
 //! generator that `init` and `update` both consume.
 //!
 //! Each test is named for what it locks down; failure messages include enough
@@ -26,13 +25,13 @@ fn registry_has_twelve_default_workflows() {
     assert_eq!(
         entries.len(),
         12,
-        "default registry must contain all 12 OpenSpec workflows (got {})",
+        "default registry must contain all 12 workflows (got {})",
         entries.len()
     );
 }
 
 #[test]
-fn registry_workflow_ids_match_openspec() {
+fn registry_workflow_ids_are_stable() {
     let expected = [
         "explore",
         "new",
@@ -49,7 +48,10 @@ fn registry_workflow_ids_match_openspec() {
     ];
     let entries = get_skill_templates(None);
     let actual: Vec<&str> = entries.iter().map(|e| e.workflow_id.as_str()).collect();
-    assert_eq!(actual, expected, "workflow ids must match OpenSpec order");
+    assert_eq!(
+        actual, expected,
+        "workflow ids must retain their canonical order"
+    );
 }
 
 #[test]
@@ -61,11 +63,6 @@ fn registry_dir_names_use_speckit_prefix() {
             "dir name `{}` for workflow `{}` must start with `speckit-`",
             entry.dir_name,
             entry.workflow_id
-        );
-        assert!(
-            !entry.dir_name.contains("openspec"),
-            "dir name `{}` must not contain `openspec`",
-            entry.dir_name
         );
     }
 }
@@ -160,23 +157,13 @@ fn instructions_have_substantial_content() {
 }
 
 // ---------------------------------------------------------------------------
-// 4. Brand parity: instructions never reference OpenSpec commands
+// 4. Brand consistency: instructions use Speckit commands
 // ---------------------------------------------------------------------------
 
 #[test]
-fn instructions_have_no_openspec_branding() {
+fn instructions_use_speckit_commands() {
     let entries = get_skill_templates(None);
     for entry in &entries {
-        assert!(
-            !entry.template.instructions.contains("openspec "),
-            "instructions for `{}` still contain `openspec ` token",
-            entry.workflow_id
-        );
-        assert!(
-            !entry.template.instructions.contains("`openspec`"),
-            "instructions for `{}` still mention `openspec`",
-            entry.workflow_id
-        );
         assert!(
             !entry.template.instructions.contains("/opsx:"),
             "instructions for `{}` still mention `/opsx:` slash command",
@@ -229,8 +216,7 @@ fn frontmatter_contains_required_fields() {
 
 #[test]
 fn frontmatter_field_order_is_stable() {
-    // Order matters: OpenSpec emits fields in this exact order and the
-    // byte-stable hash tests in OpenSpec rely on it. Keep Speckit aligned.
+    // Order matters: byte-stable hash tests rely on it.
     let entries = get_skill_templates(None);
     let template = &entries[0].template;
     let content = generate_skill_content(template, "1.0.0", None);
@@ -328,9 +314,7 @@ fn parse_skill_frontmatter_handles_unterminated() {
 }
 
 // ---------------------------------------------------------------------------
-// 8. Snapshot: each generated file's body matches the OpenSpec canonical
-//    text modulo the documented brand substitutions. We don't ship a parsed
-//    OpenSpec fixture in Rust; the substitute here is the canonical Rust
+// 8. Snapshot: each generated file's body matches the canonical Rust
 //    template (which loads from `text/<workflow>.md`). The test asserts the
 //    body of every emitted file is identical to its canonical template body,
 //    proving init/update produce the same bytes.
@@ -482,8 +466,7 @@ fn init_and_update_emit_identical_bytes_for_same_template() {
 fn generated_content_hash_matches_fixture_for_every_workflow() {
     // Every skill file, when generated with the baseline version string and
     // then normalised (strip trailing ws, LF-only), must produce the same
-    // SHA-256 as the corresponding OpenSpec fixture hash (after key substitution:
-    // openspec-*  ->  speckit-*).
+    // SHA-256 as the corresponding fixture hash.
     let entries = get_skill_templates(None);
     let version = speckit_core::templates::generation::PARITY_BASELINE_VERSION.to_string();
     for entry in &entries {

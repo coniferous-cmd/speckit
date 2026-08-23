@@ -333,11 +333,7 @@ pub fn resolve_speckit_root(
     }
 
     // Machine-level fallback: global default store.
-    // Try SPECKIT_DEFAULT_STORE first, then fall back to OPENSPEC_DEFAULT_STORE
-    // for backward compatibility.
-    let default_store = std::env::var("SPECKIT_DEFAULT_STORE")
-        .or_else(|_| std::env::var("OPENSPEC_DEFAULT_STORE"))
-        .unwrap_or_default();
+    let default_store = std::env::var("SPECKIT_DEFAULT_STORE").unwrap_or_default();
     if !default_store.is_empty() {
         return resolve_default_store_root(&default_store, options.global_data_dir.as_deref());
     }

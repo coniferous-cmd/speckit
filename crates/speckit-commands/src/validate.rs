@@ -451,7 +451,6 @@ fn resolve_concurrency(value: Option<&str>) -> anyhow::Result<usize> {
     let raw = value
         .map(str::to_owned)
         .or_else(|| std::env::var("SPECKIT_CONCURRENCY").ok())
-        .or_else(|| std::env::var("OPENSPEC_CONCURRENCY").ok())
         .unwrap_or_else(|| "6".to_string());
     let parsed = raw
         .parse::<usize>()

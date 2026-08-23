@@ -32,7 +32,7 @@ const DEFAULT_ATTACH_FLAG: &str = "--add-dir";
 
 /// Whether CLI agent openers are enabled.
 pub fn is_cli_agent_openers_enabled() -> bool {
-    std::env::var("OPENSPEC_ENABLE_CLI_AGENT_OPENERS").as_deref() == Ok("1")
+    std::env::var("SPECKIT_ENABLE_CLI_AGENT_OPENERS").as_deref() == Ok("1")
 }
 
 /// Whether an opener is enabled right now.

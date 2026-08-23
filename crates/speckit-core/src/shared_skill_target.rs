@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-use crate::config::{AI_TOOLS, AiToolOption, OPENSPEC_SKILL_NAMES};
+use crate::config::{AI_TOOLS, AiToolOption, SPECKIT_SKILL_NAMES};
 
 /// The ownership-marker filename.
 const TARGET_MARKER: &str = ".speckit-target";
@@ -41,7 +41,7 @@ fn has_legacy_skills(project_path: &Path, tool: &AiToolOption) -> bool {
         .map(|dirs| {
             dirs.iter().any(|root| {
                 let skills_dir = project_path.join(root).join("skills");
-                OPENSPEC_SKILL_NAMES
+                SPECKIT_SKILL_NAMES
                     .iter()
                     .any(|skill_name| skills_dir.join(skill_name).join("SKILL.md").exists())
             })
@@ -53,7 +53,7 @@ fn has_legacy_skills(project_path: &Path, tool: &AiToolOption) -> bool {
 fn infer_shared_skill_target(project_path: &Path, skills_dir: &str) -> Option<String> {
     let mut found_generic_reference = false;
 
-    for skill_name in OPENSPEC_SKILL_NAMES {
+    for skill_name in SPECKIT_SKILL_NAMES {
         let skill_file = project_path
             .join(skills_dir)
             .join("skills")
@@ -78,7 +78,7 @@ fn infer_shared_skill_target(project_path: &Path, skills_dir: &str) -> Option<St
 
 /// Whether the canonical shared root already contains an Speckit skill.
 fn has_current_skills(project_path: &Path, skills_dir: &str) -> bool {
-    OPENSPEC_SKILL_NAMES.iter().any(|skill_name| {
+    SPECKIT_SKILL_NAMES.iter().any(|skill_name| {
         project_path
             .join(skills_dir)
             .join("skills")

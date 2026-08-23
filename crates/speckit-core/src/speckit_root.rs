@@ -9,18 +9,18 @@ use crate::store::errors::{StoreDiagnostic, StoreDiagnosticSeverity, make_store_
 // Constants
 // ---------------------------------------------------------------------------
 
-pub const OPENSPEC_ROOT_DIR: &str = "speckit";
-pub const OPENSPEC_CONFIG_YAML: &str = "speckit/config.yaml";
-pub const OPENSPEC_CONFIG_YML: &str = "speckit/config.yml";
-pub const OPENSPEC_SPECS_DIR: &str = "speckit/specs";
-pub const OPENSPEC_CHANGES_DIR: &str = "speckit/changes";
-pub const OPENSPEC_ARCHIVE_DIR: &str = "speckit/changes/archive";
-pub const DEFAULT_OPENSPEC_SCHEMA: &str = "spec-driven";
+pub const SPECKIT_ROOT_DIR: &str = "speckit";
+pub const SPECKIT_CONFIG_YAML: &str = "speckit/config.yaml";
+pub const SPECKIT_CONFIG_YML: &str = "speckit/config.yml";
+pub const SPECKIT_SPECS_DIR: &str = "speckit/specs";
+pub const SPECKIT_CHANGES_DIR: &str = "speckit/changes";
+pub const SPECKIT_ARCHIVE_DIR: &str = "speckit/changes/archive";
+pub const DEFAULT_SPECKIT_SCHEMA: &str = "spec-driven";
 pub const DIRECTORY_ANCHOR_FILE_NAME: &str = ".gitkeep";
 
 /// Directories that receive a `.gitkeep` anchor when empty, so Git clones
 /// preserve the directory structure.
-pub const ANCHORED_OPENSPEC_DIRS: [&str; 2] = [OPENSPEC_SPECS_DIR, OPENSPEC_ARCHIVE_DIR];
+pub const ANCHORED_SPECKIT_DIRS: [&str; 2] = [SPECKIT_SPECS_DIR, SPECKIT_ARCHIVE_DIR];
 
 // ---------------------------------------------------------------------------
 // Path-kind helper
@@ -173,7 +173,7 @@ pub fn inspect_speckit_root(store_root: &Path) -> SpeckitRootInspection {
         return inspection;
     }
 
-    let speckit_path = store_root.join(OPENSPEC_ROOT_DIR);
+    let speckit_path = store_root.join(SPECKIT_ROOT_DIR);
     let speckit_kind = path_kind(&speckit_path);
     inspection.present = Some(speckit_kind == DIRECTORY);
 
@@ -196,18 +196,18 @@ pub fn inspect_speckit_root(store_root: &Path) -> SpeckitRootInspection {
     }
 
     // Config check
-    let config_yaml_kind = path_kind(&store_root.join(OPENSPEC_CONFIG_YAML));
-    let config_yml_kind = path_kind(&store_root.join(OPENSPEC_CONFIG_YML));
+    let config_yaml_kind = path_kind(&store_root.join(SPECKIT_CONFIG_YAML));
+    let config_yml_kind = path_kind(&store_root.join(SPECKIT_CONFIG_YML));
 
     if config_yaml_kind == FILE {
         inspection.config = InspectionPresence {
             present: Some(true),
-            path: Some(OPENSPEC_CONFIG_YAML.into()),
+            path: Some(SPECKIT_CONFIG_YAML.into()),
         };
     } else if config_yml_kind == FILE {
         inspection.config = InspectionPresence {
             present: Some(true),
-            path: Some(OPENSPEC_CONFIG_YML.into()),
+            path: Some(SPECKIT_CONFIG_YML.into()),
         };
     } else {
         inspection.config = InspectionPresence {
@@ -234,7 +234,7 @@ pub fn inspect_speckit_root(store_root: &Path) -> SpeckitRootInspection {
         &mut inspection,
         store_root,
         "specs",
-        OPENSPEC_SPECS_DIR,
+        SPECKIT_SPECS_DIR,
         "speckit_specs_not_directory",
         "speckit.specs",
     );
@@ -242,7 +242,7 @@ pub fn inspect_speckit_root(store_root: &Path) -> SpeckitRootInspection {
         &mut inspection,
         store_root,
         "changes",
-        OPENSPEC_CHANGES_DIR,
+        SPECKIT_CHANGES_DIR,
         "speckit_changes_not_directory",
         "speckit.changes",
     );
@@ -251,7 +251,7 @@ pub fn inspect_speckit_root(store_root: &Path) -> SpeckitRootInspection {
             &mut inspection,
             store_root,
             "archive",
-            OPENSPEC_ARCHIVE_DIR,
+            SPECKIT_ARCHIVE_DIR,
             "speckit_archive_not_directory",
             "speckit.archive",
         );
@@ -297,8 +297,8 @@ fn ensure_default_config(
     store_root: &Path,
     ledger: &mut Vec<CreatedPathLedgerEntry>,
 ) -> Result<(), String> {
-    let config_yaml_path = store_root.join(OPENSPEC_CONFIG_YAML);
-    let config_yml_path = store_root.join(OPENSPEC_CONFIG_YML);
+    let config_yaml_path = store_root.join(SPECKIT_CONFIG_YAML);
+    let config_yml_path = store_root.join(SPECKIT_CONFIG_YML);
     let yaml_kind = path_kind(&config_yaml_path);
     let yml_kind = path_kind(&config_yml_path);
 
@@ -309,12 +309,12 @@ fn ensure_default_config(
         return Err("Speckit config path exists but is not a file.".into());
     }
 
-    let default_config = format!("schema: {DEFAULT_OPENSPEC_SCHEMA}\n");
+    let default_config = format!("schema: {DEFAULT_SPECKIT_SCHEMA}\n");
     fs::write(&config_yaml_path, &default_config)
         .map_err(|e| format!("Failed to write {}: {e}", config_yaml_path.display()))?;
 
     ledger.push(CreatedPathLedgerEntry {
-        relative_path: relative_artifact(OPENSPEC_CONFIG_YAML, &CreatedPathKind::File),
+        relative_path: relative_artifact(SPECKIT_CONFIG_YAML, &CreatedPathKind::File),
         absolute_path: config_yaml_path,
         kind: CreatedPathKind::File,
     });
@@ -366,14 +366,14 @@ pub fn ensure_speckit_root(
         return Err("Store root is not a directory.".into());
     }
 
-    ensure_directory(store_root, OPENSPEC_ROOT_DIR, &mut ledger)?;
-    ensure_directory(store_root, OPENSPEC_SPECS_DIR, &mut ledger)?;
-    ensure_directory(store_root, OPENSPEC_CHANGES_DIR, &mut ledger)?;
-    ensure_directory(store_root, OPENSPEC_ARCHIVE_DIR, &mut ledger)?;
+    ensure_directory(store_root, SPECKIT_ROOT_DIR, &mut ledger)?;
+    ensure_directory(store_root, SPECKIT_SPECS_DIR, &mut ledger)?;
+    ensure_directory(store_root, SPECKIT_CHANGES_DIR, &mut ledger)?;
+    ensure_directory(store_root, SPECKIT_ARCHIVE_DIR, &mut ledger)?;
     ensure_default_config(store_root, &mut ledger)?;
 
     if options.anchor_empty_directories {
-        for rel_dir in ANCHORED_OPENSPEC_DIRS {
+        for rel_dir in ANCHORED_SPECKIT_DIRS {
             ensure_directory_anchor(store_root, rel_dir, &mut ledger)?;
         }
     }

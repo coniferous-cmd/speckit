@@ -6,7 +6,7 @@
 use std::fs;
 use std::path::Path;
 
-use crate::config::{AI_TOOLS, AiToolOption, OPENSPEC_SKILL_NAMES};
+use crate::config::{AI_TOOLS, AiToolOption, SPECKIT_SKILL_NAMES};
 use crate::shared_skill_target::reconcile_shared_skill_targets;
 
 /// Returns `true` if the tool supports skills (has a skills directory
@@ -46,7 +46,7 @@ pub fn get_available_tools(project_path: &Path) -> Vec<AiToolOption> {
             // Global skills dir: check if any skill files exist
             if tool.global_skills_dir.is_some() {
                 let skills_dir = resolve_tool_skills_dir(project_path, tool);
-                return OPENSPEC_SKILL_NAMES
+                return SPECKIT_SKILL_NAMES
                     .iter()
                     .any(|skill_name| skills_dir.join(skill_name).join("SKILL.md").exists());
             }

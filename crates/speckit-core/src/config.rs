@@ -6,7 +6,7 @@ use std::sync::LazyLock;
 pub const SPECKIT_DIR_NAME: &str = "speckit";
 
 /// All Speckit skill names (slash-command identifiers).
-pub const OPENSPEC_SKILL_NAMES: &[&str] = &[
+pub const SPECKIT_SKILL_NAMES: &[&str] = &[
     "speckit-explore",
     "speckit-new-change",
     "speckit-continue-change",
@@ -27,9 +27,9 @@ pub struct SpeckitMarkers {
     pub end: &'static str,
 }
 
-pub const OPENSPEC_MARKERS: SpeckitMarkers = SpeckitMarkers {
-    start: "<!-- OPENSPEC:START -->",
-    end: "<!-- OPENSPEC:END -->",
+pub const SPECKIT_MARKERS: SpeckitMarkers = SpeckitMarkers {
+    start: "<!-- SPECKIT:START -->",
+    end: "<!-- SPECKIT:END -->",
 };
 
 /// Configuration for a single AI tool supported by Speckit.
@@ -595,12 +595,12 @@ mod tests {
 
     #[test]
     fn speckit_skill_names_count() {
-        assert_eq!(OPENSPEC_SKILL_NAMES.len(), 12);
+        assert_eq!(SPECKIT_SKILL_NAMES.len(), 12);
     }
 
     #[test]
     fn markers_roundtrip() {
-        assert_eq!(OPENSPEC_MARKERS.start, "<!-- OPENSPEC:START -->");
-        assert_eq!(OPENSPEC_MARKERS.end, "<!-- OPENSPEC:END -->");
+        assert_eq!(SPECKIT_MARKERS.start, "<!-- SPECKIT:START -->");
+        assert_eq!(SPECKIT_MARKERS.end, "<!-- SPECKIT:END -->");
     }
 }

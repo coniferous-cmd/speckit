@@ -7,7 +7,7 @@ pub const METADATA_FILENAME: &str = ".speckit.yaml";
 
 /// Change metadata stored in .speckit.yaml.
 ///
-/// `retire_capabilities` is a boolean to mirror OpenSpec's schema: when
+/// `retire_capabilities` is a boolean: when
 /// `true`, the entire change is treated as retiring a capability, and the
 /// corresponding spec is removed by archive.  A list value is tolerated as
 /// a legacy alias for `true` so older `.speckit.yaml` files keep working.
@@ -161,7 +161,7 @@ mod tests {
 
     #[test]
     fn test_retire_capabilities_legacy_list_is_true() {
-        // Older Speckit/OpenSpec writers used a list of capability ids.  We
+        // Older writers used a list of capability ids. We
         // still treat any non-empty list as "retire" for backwards
         // compatibility.
         let dir = tempdir().unwrap();

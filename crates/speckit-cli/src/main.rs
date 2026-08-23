@@ -820,7 +820,7 @@ async fn main() {
         }
     }
 
-    // Match the OpenSpec CLI lifecycle: keep the first-run notice out of
+    // Keep the first-run notice out of
     // machine-readable output, record the command path, then flush before
     // returning from main. Telemetry is silent on network/config failures.
     speckit_telemetry::maybe_show_telemetry_notice(speckit_telemetry::TelemetryNoticeOptions {

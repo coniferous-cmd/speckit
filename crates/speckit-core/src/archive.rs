@@ -1,7 +1,7 @@
 //! Archive Command: moves completed changes to the archive directory
 //! and optionally applies delta specs to main specs.
 //!
-//! P0-7 atomicity audit — mirrors the OpenSpec TypeScript archive flow:
+//! P0-7 atomicity audit:
 //!  1. Resolve change name (interactive if needed)
 //!  2. Validate tasks are complete (unless `--no-validate`)
 //!  3. Read metadata for `skip_specs` / `retire_capabilities`
@@ -45,7 +45,7 @@ pub struct ArchiveResult {
     pub warnings: Option<Vec<String>>,
 }
 
-/// Spec update totals — matches OpenSpec JSON field shape.
+/// Spec update totals.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct SpecTotals {
     pub added: usize,
@@ -311,7 +311,7 @@ impl ArchiveCommand {
 
     /// Decide the outcome for a spec update (write / retire / skip).
     ///
-    /// Mirrors OpenSpec's `decideSpecOutcome`:
+    /// Determines the spec outcome:
     /// - `retire` — retire_capabilities declared, no requirements remain, no
     ///   unaccounted content, spec exists, and something was removed this run.
     /// - `skip` — capability already retired (no spec to delete).
@@ -468,7 +468,7 @@ impl Drop for ArchiveLock {
 }
 
 /// True when a rebuilt spec has no requirement blocks.
-/// Mirrors OpenSpec's `isRetirableSpec`: a spec whose only validation error
+/// A spec whose only validation error
 /// is "no requirements" is a retirement candidate.
 pub fn is_retirable_spec(_spec_name: &str, rebuilt: &str) -> bool {
     !rebuilt

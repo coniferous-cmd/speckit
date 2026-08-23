@@ -47,10 +47,10 @@ pub enum SchemaSource {
 
 /// Gets the package's built-in schemas directory path.
 ///
-/// In the Rust port, this is determined by the `OPENSPEC_SCHEMAS_DIR` environment
+/// In the Rust port, this is determined by the `SPECKIT_SCHEMAS_DIR` environment
 /// variable, or falls back to a relative path from the binary.
 pub fn get_package_schemas_dir() -> Option<PathBuf> {
-    if let Ok(dir) = std::env::var("OPENSPEC_SCHEMAS_DIR") {
+    if let Ok(dir) = std::env::var("SPECKIT_SCHEMAS_DIR") {
         let path = PathBuf::from(dir);
         if path.is_dir() {
             return Some(path);

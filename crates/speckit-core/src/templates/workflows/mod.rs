@@ -4,9 +4,7 @@
 //! of the Speckit workflow operations (explore, new, continue, apply, etc.).
 //!
 //! Instruction bodies are loaded from `text/<workflow>.md` via `include_str!`
-//! so the canonical text is byte-equivalent to the OpenSpec source after the
-//! documented brand substitution (`openspec` -> `speckit`, `OpenSpec` ->
-//! `Speckit`, `/opsx:` -> `/speckit:`). Do not duplicate or rewrite this text
+//! so the canonical text is loaded directly. Do not duplicate or rewrite this text
 //! inline; the parity tests depend on a single source of truth.
 
 use super::types::{CommandTemplate, SkillTemplate};
