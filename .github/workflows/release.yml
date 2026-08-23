@@ -174,7 +174,7 @@ jobs:
           # Update optionalDependencies versions in main package
           cd npm/speckit
           jq --arg v "$VERSION" '
-            .optionalDependencies[" @speckit/darwin-arm64"] = $v |
+            .optionalDependencies["@speckit/darwin-arm64"] = $v |
             .optionalDependencies["@speckit/darwin-x64"] = $v |
             .optionalDependencies["@speckit/linux-x64"] = $v |
             .optionalDependencies["@speckit/linux-arm64"] = $v |
