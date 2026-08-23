@@ -217,7 +217,10 @@ jobs:
           chmod +x npm/speckit-linux-x64/speckit
 
       - name: Verify npm auth and scope access
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
+          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
           echo "npm whoami:"
           npm whoami
           echo "---"
