@@ -249,13 +249,24 @@ async fn build_artifact_instructions(
         },
         context,
         rules,
-        template: template.to_string(),
+        template: prepend_create_time(template),
         dependencies,
         unlocks,
         references,
         skipped: false,
         warning: None,
     })
+}
+
+/// Prepend a YAML frontmatter block with a single `create-time` key to a
+/// template body. The timestamp is captured at invocation time in local time
+/// and formatted as `YYYY-MM-DD HH:MM:SS` with no timezone suffix.
+fn prepend_create_time(template: &str) -> String {
+    let header = format!(
+        "---\ncreate-time: {}\n---\n\n",
+        chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
+    );
+    format!("{header}{template}")
 }
 
 /// Print artifact instructions in human-readable format.
@@ -701,5 +712,87 @@ fn print_archive_instructions_text(instructions: &ArchiveInstructions) {
 
     if instructions.context.is_none() && instructions.operation_guidance.is_none() {
         println!("No project context or operation guidance configured.");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::prepend_create_time;
+    use chrono::Local;
+
+    #[test]
+    fn prepend_create_time_starts_with_frontmatter() {
+        let body = "## Why\n\nbody\n";
+        let stamped = prepend_create_time(body);
+
+        let lines: Vec<&str> = stamped.split('\n').collect();
+        assert_eq!(lines[0], "---", "first line must be the frontmatter open");
+        assert!(
+            lines[1].starts_with("create-time: "),
+            "second line must hold the create-time key, got: {}",
+            lines[1]
+        );
+        assert_eq!(lines[2], "---", "third line must close the frontmatter");
+        assert_eq!(
+            lines[3], "",
+            "blank line must separate frontmatter from body"
+        );
+        assert_eq!(lines[4], "## Why", "body must follow unchanged");
+    }
+
+    #[test]
+    fn prepend_create_time_value_matches_format() {
+        let stamped = prepend_create_time("body");
+        let line = stamped
+            .lines()
+            .find(|l| l.starts_with("create-time: "))
+            .expect("create-time line must be present");
+        let value = line.trim_start_matches("create-time: ");
+
+        assert!(
+            regex::Regex::new(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$")
+                .unwrap()
+                .is_match(value),
+            "create-time value must match YYYY-MM-DD HH:MM:SS, got: {value}"
+        );
+        assert!(
+            !value.contains('Z') && !value.contains('+') && !value.contains("UTC"),
+            "create-time must carry no timezone marker, got: {value}"
+        );
+    }
+
+    #[test]
+    fn prepend_create_time_value_is_close_to_now() {
+        let before = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+        let stamped = prepend_create_time("body");
+        let after = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+        let captured = stamped
+            .lines()
+            .find(|l| l.starts_with("create-time: "))
+            .unwrap()
+            .trim_start_matches("create-time: ")
+            .to_string();
+
+        // Captured timestamp must lie within [before, after]; clock skew
+        // outside that window would indicate the helper is reading from a
+        // different clock than Local::now().
+        assert!(
+            captured >= before && captured <= after,
+            "create-time {captured} not within [{before}, {after}]"
+        );
+    }
+
+    #[test]
+    fn prepend_create_time_preserves_body_verbatim() {
+        let body = "line one\nline two\n\nline four\n";
+        let stamped = prepend_create_time(body);
+        let (_, tail) = stamped
+            .split_once("\n\n")
+            .expect("frontmatter must end with blank line");
+        // tail begins after the blank line; the original body should follow.
+        assert!(
+            stamped.ends_with(body),
+            "stamped output must end with the original body, got tail: {tail:?}"
+        );
     }
 }
