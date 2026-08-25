@@ -1,0 +1,33 @@
+name: spec-driven
+version: 1
+description: Default Speckit workflow for proposal, specifications, design, and tasks.
+artifacts:
+  - id: proposal
+    generates: proposal.md
+    description: Explains why the change is needed and its expected outcome.
+    template: proposal.md
+    requires: []
+  - id: specs
+    generates: "specs/**/*.md"
+    description: Defines the behavioral requirements changed by this proposal.
+    template: specs.md
+    requires:
+      - proposal
+  - id: design
+    generates: design.md
+    description: Records the technical design for implementing the change.
+    template: design.md
+    requires:
+      - proposal
+  - id: tasks
+    generates: tasks.md
+    description: Lists the implementation work and its verification steps.
+    template: tasks.md
+    requires:
+      - specs
+      - design
+apply:
+  requires:
+    - tasks
+  tracks: tasks.md
+  instruction: Read the change context, implement pending tasks, and mark each completed task.
