@@ -8,6 +8,7 @@ use super::shared::{
     ArtifactStatus, DEFAULT_SCHEMA, get_available_changes, print_json, validate_change_exists,
 };
 use crate::shared_output::StoreDiagnostic;
+use speckit_core::change_metadata::read_skip_specs_marker;
 
 // -----------------------------------------------------------------------------
 // Types
@@ -96,7 +97,9 @@ pub async fn status_command(options: StatusOptions) -> anyhow::Result<()> {
 
     let artifacts = detect_artifact_status(&change_dir).await;
     let done_count = artifacts.iter().filter(|a| a.status == "done").count();
-    let is_planning_complete = !artifacts.is_empty() && done_count == artifacts.len();
+    let skipped_count = artifacts.iter().filter(|a| a.status == "skipped").count();
+    let is_planning_complete =
+        !artifacts.is_empty() && done_count + skipped_count == artifacts.len();
 
     let output = ChangeStatusOutput {
         change_name: change_name.clone(),
@@ -135,28 +138,28 @@ async fn detect_artifact_status(change_dir: &std::path::Path) -> Vec<ArtifactSta
         missing_deps: None,
     });
 
+    let specs_status = if read_skip_specs_marker(change_dir).unwrap_or(false) {
+        "skipped"
+    } else if specs_dir.is_dir() {
+        // Check if any .md files exist
+        let has_specs = std::fs::read_dir(&specs_dir)
+            .ok()
+            .map(|mut rd| {
+                rd.any(|e| {
+                    e.ok()
+                        .map(|e| e.path().extension().map(|ext| ext == "md").unwrap_or(false))
+                        .unwrap_or(false)
+                })
+            })
+            .unwrap_or(false);
+        if has_specs { "done" } else { "ready" }
+    } else {
+        "ready"
+    };
+
     artifacts.push(ArtifactStatusEntry {
         id: "specs".to_string(),
-        status: if specs_dir.is_dir() {
-            // Check if any .md files exist
-            let has_specs = std::fs::read_dir(&specs_dir)
-                .ok()
-                .map(|mut rd| {
-                    rd.any(|e| {
-                        e.ok()
-                            .map(|e| e.path().extension().map(|ext| ext == "md").unwrap_or(false))
-                            .unwrap_or(false)
-                    })
-                })
-                .unwrap_or(false);
-            if has_specs {
-                "done".to_string()
-            } else {
-                "ready".to_string()
-            }
-        } else {
-            "ready".to_string()
-        },
+        status: specs_status.to_string(),
         missing_deps: None,
     });
 

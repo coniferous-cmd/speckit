@@ -41,6 +41,21 @@ fn json_stdout(output: &Output) -> Value {
     })
 }
 
+fn json_error(output: &Output) -> Value {
+    assert!(
+        !output.status.success(),
+        "CLI unexpectedly succeeded: stdout={} stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    serde_json::from_slice(&output.stdout).unwrap_or_else(|error| {
+        panic!(
+            "failed JSON commands must emit one JSON document: {error}\\nstdout={}",
+            String::from_utf8_lossy(&output.stdout)
+        )
+    })
+}
+
 fn find_named_file(root: &Path, name: &str) -> Option<PathBuf> {
     for entry in std::fs::read_dir(root).ok()? {
         let entry = entry.ok()?;
@@ -163,4 +178,221 @@ fn json_mode_is_pure_across_root_and_workset_commands() {
     let json = json_stdout(&worksets);
     assert_eq!(json["worksets"], serde_json::json!([]));
     assert_eq!(json["status"], serde_json::json!([]));
+}
+
+#[test]
+fn change_lifecycle_json_contract_is_available_from_nested_directory() {
+    let (_temp, project, nested, config_home, data_home) = fixture();
+
+    let created = run_cli(
+        &project,
+        &config_home,
+        &data_home,
+        &["new", "change", "cli-lifecycle", "--json"],
+    );
+    let created_json = json_stdout(&created);
+    assert_eq!(created_json["change"]["id"], "cli-lifecycle");
+    assert_eq!(created_json["change"]["schema"], "spec-driven");
+    assert!(
+        project
+            .join("speckit/changes/cli-lifecycle/.speckit.yaml")
+            .is_file()
+    );
+
+    let status = run_cli(
+        &nested,
+        &config_home,
+        &data_home,
+        &["status", "--change", "cli-lifecycle", "--json"],
+    );
+    let status_json = json_stdout(&status);
+    assert_eq!(status_json["change_name"], "cli-lifecycle");
+    assert_eq!(status_json["artifacts"][0]["id"], "proposal");
+    assert_eq!(status_json["artifacts"][0]["status"], "ready");
+
+    let instructions = run_cli(
+        &nested,
+        &config_home,
+        &data_home,
+        &[
+            "instructions",
+            "proposal",
+            "--change",
+            "cli-lifecycle",
+            "--json",
+        ],
+    );
+    let instructions_json = json_stdout(&instructions);
+    assert_eq!(instructions_json["artifact_id"], "proposal");
+    assert_eq!(instructions_json["change_name"], "cli-lifecycle");
+    assert!(
+        instructions_json["resolved_output_path"]
+            .as_str()
+            .unwrap()
+            .ends_with("cli-lifecycle/proposal.md")
+    );
+}
+
+#[test]
+fn change_commands_report_json_errors_without_using_user_configuration() {
+    let (_temp, project, _nested, config_home, data_home) = fixture();
+
+    let invalid_name = run_cli(
+        &project,
+        &config_home,
+        &data_home,
+        &["new", "change", "Invalid_Name", "--json"],
+    );
+    let invalid_json = json_error(&invalid_name);
+    assert_eq!(invalid_json["status"][0]["code"], "invalid_name");
+
+    let missing_change = run_cli(
+        &project,
+        &config_home,
+        &data_home,
+        &["status", "--change", "does-not-exist", "--json"],
+    );
+    assert!(!missing_change.status.success());
+    assert!(String::from_utf8_lossy(&missing_change.stderr).contains("does-not-exist"));
+}
+
+#[test]
+fn status_marks_specs_skipped_when_change_metadata_requests_it() {
+    let (_temp, project, _nested, config_home, data_home) = fixture();
+    let change_dir = project.join("speckit/changes/tooling-only");
+    std::fs::create_dir_all(&change_dir).unwrap();
+    std::fs::write(
+        change_dir.join(".speckit.yaml"),
+        "schema: spec-driven\nskip_specs: true\n",
+    )
+    .unwrap();
+    for file in ["proposal.md", "design.md", "tasks.md"] {
+        std::fs::write(change_dir.join(file), "complete\n").unwrap();
+    }
+
+    let output = run_cli(
+        &project,
+        &config_home,
+        &data_home,
+        &["status", "--change", "tooling-only", "--json"],
+    );
+    let json = json_stdout(&output);
+    assert_eq!(json["artifacts"][1]["id"], "specs");
+    assert_eq!(json["artifacts"][1]["status"], "skipped");
+    assert_eq!(json["is_planning_complete"], true);
+}
+
+#[test]
+fn archive_json_moves_completed_change_and_preserves_failed_changes() {
+    let (_temp, project, _nested, config_home, data_home) = fixture();
+    let changes = project.join("speckit/changes");
+
+    let completed = changes.join("completed-change");
+    std::fs::create_dir_all(&completed).unwrap();
+    let archived = run_cli(
+        &project,
+        &config_home,
+        &data_home,
+        &[
+            "archive",
+            "completed-change",
+            "--yes",
+            "--skip-specs",
+            "--json",
+        ],
+    );
+    let archived_json = json_stdout(&archived);
+    assert_eq!(archived_json["change"], "completed-change");
+    assert!(Path::new(archived_json["path"].as_str().unwrap()).is_dir());
+    assert!(!completed.exists());
+
+    let incomplete = changes.join("incomplete-change");
+    std::fs::create_dir_all(&incomplete).unwrap();
+    std::fs::write(incomplete.join("tasks.md"), "- [ ] pending\n").unwrap();
+    let rejected = run_cli(
+        &project,
+        &config_home,
+        &data_home,
+        &["archive", "incomplete-change", "--yes", "--json"],
+    );
+    let rejected_json = json_error(&rejected);
+    assert_eq!(rejected_json["status"][0]["code"], "archive_failed");
+    assert!(incomplete.is_dir());
+
+    let bad_change = changes.join("bad-spec-change");
+    let delta = bad_change.join("specs/cap-a");
+    std::fs::create_dir_all(&delta).unwrap();
+    std::fs::write(bad_change.join("tasks.md"), "- [x] done\n").unwrap();
+    std::fs::write(
+        delta.join("spec.md"),
+        "## MODIFIED Requirements\n\n### Requirement: Missing\nContent.\n",
+    )
+    .unwrap();
+    let main_spec = project.join("speckit/specs/cap-a/spec.md");
+    std::fs::create_dir_all(main_spec.parent().unwrap()).unwrap();
+    std::fs::write(
+        &main_spec,
+        "# Cap A\n\n## Requirements\n\n### Requirement: Existing\nContent.\n",
+    )
+    .unwrap();
+    let spec_failure = run_cli(
+        &project,
+        &config_home,
+        &data_home,
+        &["archive", "bad-spec-change", "--yes", "--json"],
+    );
+    let failure_json = json_error(&spec_failure);
+    assert_eq!(failure_json["status"][0]["code"], "archive_failed");
+    assert!(bad_change.is_dir());
+    assert_eq!(
+        std::fs::read_to_string(main_spec).unwrap(),
+        "# Cap A\n\n## Requirements\n\n### Requirement: Existing\nContent.\n"
+    );
+}
+
+#[test]
+fn init_and_update_keep_managed_skills_in_sync_without_touching_custom_skills() {
+    let (_temp, project, _nested, config_home, data_home) = fixture();
+
+    let initialized = run_cli(
+        &project,
+        &config_home,
+        &data_home,
+        &["init", ".", "--tools", "claude", "--force"],
+    );
+    assert!(
+        initialized.status.success(),
+        "init failed: {}",
+        String::from_utf8_lossy(&initialized.stderr)
+    );
+
+    let managed = project.join(".claude/skills/speckit-explore/SKILL.md");
+    let generated_by_init = std::fs::read_to_string(&managed).unwrap();
+    let custom = project.join(".claude/skills/my-custom-skill/SKILL.md");
+    let custom_contents =
+        "---\nname: my-custom-skill\ndescription: user owned\n---\n\nDo not replace.\n";
+    std::fs::create_dir_all(custom.parent().unwrap()).unwrap();
+    std::fs::write(&custom, custom_contents).unwrap();
+    std::fs::write(
+        &managed,
+        generated_by_init.replacen("generatedBy: \"", "generatedBy: \"stale-", 1),
+    )
+    .unwrap();
+
+    let updated = run_cli(
+        &project,
+        &config_home,
+        &data_home,
+        &["update", ".", "--force"],
+    );
+    assert!(
+        updated.status.success(),
+        "update failed: {}",
+        String::from_utf8_lossy(&updated.stderr)
+    );
+    assert_eq!(
+        std::fs::read_to_string(&managed).unwrap(),
+        generated_by_init
+    );
+    assert_eq!(std::fs::read_to_string(&custom).unwrap(), custom_contents);
 }
