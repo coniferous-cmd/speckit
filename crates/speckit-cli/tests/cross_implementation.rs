@@ -20,7 +20,6 @@ fn run_cli(cwd: &Path, config_home: &Path, data_home: &Path, args: &[&str]) -> O
         .env("HOME", config_home.parent().expect("config home parent"))
         .env("XDG_CONFIG_HOME", config_home)
         .env("XDG_DATA_HOME", data_home)
-        .env("SPECKIT_TELEMETRY", "0")
         .args(args)
         .output()
         .expect("run speckit CLI")

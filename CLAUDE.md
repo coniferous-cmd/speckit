@@ -34,9 +34,8 @@ Four crates in a Cargo workspace:
 | `speckit-cli` | Binary entry point (`src/main.rs`). CLI parsing via `clap` derive, dispatches to commands. |
 | `speckit-core` | Core library (~154 files). Schemas, parsers, validation, store, templates, AI tool adapters, skill generation. |
 | `speckit-commands` | Command implementations (~18 modules). Each CLI subcommand maps to a module here. |
-| `speckit-telemetry` | Anonymous usage analytics. Feature-gated behind `telemetry` (pulls in `reqwest`). Respects `DO_NOT_TRACK`. |
 
-**Dependency flow**: `cli` → `commands` → `core`. Telemetry is optional.
+**Dependency flow**: `cli` → `commands` → `core`.
 
 ## Key Modules in speckit-core
 

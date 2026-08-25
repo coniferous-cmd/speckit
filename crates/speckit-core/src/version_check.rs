@@ -105,9 +105,6 @@ fn is_check_enabled() -> bool {
     if std::env::var("DO_NOT_TRACK").as_deref() == Ok("1") {
         return false;
     }
-    if std::env::var("SPECKIT_TELEMETRY").as_deref() == Ok("0") {
-        return false;
-    }
     if std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok() {
         return false;
     }

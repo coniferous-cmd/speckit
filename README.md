@@ -106,7 +106,7 @@ Run `speckit init` to select your tools interactively, or `speckit init --tools 
 
 **Project-level** — `speckit/config.yaml` (inside the `.speckit` directory)
 
-**Global** — `~/.config/speckit/config.json` (profile, delivery, telemetry, feature flags)
+**Global** — `~/.config/speckit/config.json` (profile, delivery, feature flags)
 
 ```bash
 speckit config list              # Show all config
@@ -132,14 +132,6 @@ speckit completion install fish
 speckit completion install powershell
 ```
 
-## Telemetry
-
-Speckit collects anonymous usage analytics via PostHog to improve the product. Telemetry respects the `DO_NOT_TRACK` environment variable and can be disabled:
-
-```bash
-speckit config set telemetry.enabled false
-```
-
 ## Project Structure
 
 ```
@@ -149,7 +141,6 @@ speckit/
 │   ├── speckit-cli/             # Binary crate (CLI entry point)
 │   ├── speckit-core/            # Core library (schemas, parsers, validation, adapters)
 │   ├── speckit-commands/        # Command implementations + artifact templates
-│   └── speckit-telemetry/       # Anonymous usage analytics (optional)
 └── .github/workflows/ci.yml    # CI: fmt, clippy, build, test on Linux/macOS/Windows
 ```
 

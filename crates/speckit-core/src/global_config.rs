@@ -29,21 +29,6 @@ pub enum Delivery {
     Commands,
 }
 
-/// Telemetry section of global config (identity + opt-out).
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TelemetryConfig {
-    /// When `false`, telemetry is disabled.  Unset means enabled (opt-out model).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub enabled: Option<bool>,
-    /// Anonymous random UUID; no relation to the user.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub anonymous_id: Option<String>,
-    /// Whether the first-run telemetry notice has been shown.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub notice_seen: Option<bool>,
-}
-
 /// Global Speckit configuration persisted at `~/.config/speckit/config.json`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -63,9 +48,6 @@ pub struct GlobalConfig {
     /// Workset opener rows (slice 7.1); hand-edited, validated on use.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub openers: Option<serde_json::Value>,
-    /// Anonymous usage analytics settings and identity.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub telemetry: Option<TelemetryConfig>,
 }
 
 impl Default for GlobalConfig {
@@ -77,7 +59,6 @@ impl Default for GlobalConfig {
             workflows: None,
             default_store: None,
             openers: None,
-            telemetry: None,
         }
     }
 }
@@ -277,18 +258,12 @@ mod tests {
             profile: Profile::Custom,
             workflows: Some(vec!["explore".into(), "apply".into()]),
             default_store: Some("my-store".into()),
-            telemetry: Some(TelemetryConfig {
-                enabled: Some(false),
-                anonymous_id: None,
-                notice_seen: None,
-            }),
             ..Default::default()
         };
         let json = serde_json::to_string(&cfg).unwrap();
         let back: GlobalConfig = serde_json::from_str(&json).unwrap();
         assert_eq!(back.profile, Profile::Custom);
         assert_eq!(back.default_store.as_deref(), Some("my-store"));
-        assert_eq!(back.telemetry.unwrap().enabled, Some(false));
     }
 
     #[test]

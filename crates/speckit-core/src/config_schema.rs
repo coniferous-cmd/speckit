@@ -5,20 +5,6 @@ use std::collections::HashMap;
 // Global config schema types  (mirrors GlobalConfigSchema in config-schema.ts)
 // ---------------------------------------------------------------------------
 
-/// Telemetry sub-schema used during CLI validation.
-/// `passthrough` equivalent: the struct carries `#[serde(flatten)]` so that
-/// runtime-managed fields (`anonymousId`, `noticeSeen`) survive round-trips
-/// even when the CLI only sets `enabled`.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TelemetrySchema {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub enabled: Option<bool>,
-    /// Catch-all for forward-compatible telemetry fields.
-    #[serde(flatten)]
-    pub extra: HashMap<String, serde_json::Value>,
-}
-
 /// Schema-validated shape of the global configuration file.
 ///
 /// Uses `serde(flatten)` on the top level to preserve unknown top-level
@@ -39,8 +25,6 @@ pub struct GlobalConfigSchema {
     /// or project-level store pointer resolves.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub default_store: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub telemetry: Option<TelemetrySchema>,
     /// Catch-all for forward-compatible top-level fields.
     #[serde(flatten)]
     pub extra: HashMap<String, serde_json::Value>,
@@ -61,7 +45,6 @@ pub fn default_global_config_schema() -> GlobalConfigSchema {
         delivery: "both".into(),
         workflows: None,
         default_store: None,
-        telemetry: None,
         extra: HashMap::new(),
     }
 }
@@ -120,7 +103,6 @@ pub fn validate_config_key_path(path: &str) -> KeyPathValidation {
         "delivery",
         "workflows",
         "default_store",
-        "telemetry",
     ];
     // Accept both camelCase and snake_case root keys for ergonomics.
     let root_key_norm = root_key.replace('-', "_");
@@ -138,29 +120,6 @@ pub fn validate_config_key_path(path: &str) -> KeyPathValidation {
                 reason: Some(
                     "featureFlags values are booleans and do not support nested keys".into(),
                 ),
-            };
-        }
-        return KeyPathValidation {
-            valid: true,
-            reason: None,
-        };
-    }
-
-    if root_key_norm == "telemetry" {
-        if raw_keys.len() == 1 {
-            return KeyPathValidation {
-                valid: false,
-                reason: Some("Set nested keys under telemetry (e.g. telemetry.enabled)".into()),
-            };
-        }
-        let telemetry_settable = ["enabled"];
-        if raw_keys.len() != 2 || !telemetry_settable.contains(&raw_keys[1]) {
-            return KeyPathValidation {
-                valid: false,
-                reason: Some(format!(
-                    "Unknown telemetry key \"{}\" (allowed: enabled)",
-                    raw_keys[1..].join(".")
-                )),
             };
         }
         return KeyPathValidation {
@@ -384,8 +343,6 @@ mod tests {
     #[test]
     fn validate_known_paths() {
         let r = validate_config_key_path("profile");
-        assert!(r.valid);
-        let r = validate_config_key_path("telemetry.enabled");
         assert!(r.valid);
         let r = validate_config_key_path("feature_flags.myFlag");
         assert!(r.valid);

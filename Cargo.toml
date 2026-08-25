@@ -4,7 +4,6 @@ members = [
     "crates/speckit-cli",
     "crates/speckit-core",
     "crates/speckit-commands",
-    "crates/speckit-telemetry",
 ]
 
 [workspace.package]
@@ -49,9 +48,6 @@ walkdir = "2"
 uuid = { version = "1", features = ["v4"] }
 sha2 = "0.10"
 
-# HTTP (telemetry)
-reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
-
 # Date/Time
 chrono = "0.4"
 
@@ -64,7 +60,6 @@ regex = "1"
 # Internal crates
 speckit-core = { path = "crates/speckit-core" }
 speckit-commands = { path = "crates/speckit-commands" }
-speckit-telemetry = { path = "crates/speckit-telemetry" }
 
 [profile.release]
 opt-level = 3
