@@ -15,6 +15,7 @@
     "x64"
   ],
   "files": [
-    "speckit.exe"
+    "speckit.exe",
+    "schemas/**"
   ]
 }

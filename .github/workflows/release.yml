@@ -72,7 +72,9 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: speckit-${{ matrix.platform }}
-          path: target/${{ matrix.target }}/release/${{ matrix.binary }}
+          path: |
+            target/${{ matrix.target }}/release/${{ matrix.binary }}
+            schemas
           if-no-files-found: error
 
   create-release:
@@ -124,17 +126,17 @@ jobs:
           cd artifacts
 
           # Linux x64
-          tar -czf ../release/speckit-linux-x64.tar.gz -C speckit-linux-x64 speckit
+          tar -czf ../release/speckit-linux-x64.tar.gz -C speckit-linux-x64 speckit schemas
 
           # macOS x64
-          tar -czf ../release/speckit-darwin-x64.tar.gz -C speckit-darwin-x64 speckit
+          tar -czf ../release/speckit-darwin-x64.tar.gz -C speckit-darwin-x64 speckit schemas
 
           # macOS arm64
-          tar -czf ../release/speckit-darwin-arm64.tar.gz -C speckit-darwin-arm64 speckit
+          tar -czf ../release/speckit-darwin-arm64.tar.gz -C speckit-darwin-arm64 speckit schemas
 
           # Windows x64
           cd speckit-win32-x64
-          zip ../../release/speckit-win32-x64.zip speckit.exe
+          zip -r ../../release/speckit-win32-x64.zip speckit.exe schemas
           cd ..
 
       - name: Create GitHub Release
@@ -210,6 +212,12 @@ jobs:
           cp artifacts/speckit-darwin-x64/speckit npm/speckit-darwin-x64/
           cp artifacts/speckit-linux-x64/speckit npm/speckit-linux-x64/
           cp artifacts/speckit-win32-x64/speckit.exe npm/speckit-win32-x64/
+
+          # Keep the package schemas next to each native binary so the CLI can
+          # resolve built-in workflows after installation.
+          for pkg in npm/speckit-darwin-arm64 npm/speckit-darwin-x64 npm/speckit-linux-x64 npm/speckit-win32-x64; do
+            cp -R schemas "$pkg/"
+          done
 
           # Make binaries executable
           chmod +x npm/speckit-darwin-arm64/speckit
