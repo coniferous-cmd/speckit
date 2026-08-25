@@ -3,7 +3,7 @@
 //! This module contains types, constants, and validation helpers used across
 //! multiple artifact workflow commands.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -256,39 +256,8 @@ pub async fn validate_change_exists(
 
 /// Validates that a schema exists and returns its name.
 pub fn validate_schema_exists(schema_name: &str, project_root: &str) -> anyhow::Result<String> {
-    // Check for project-local schema
-    let project_schema = Path::new(project_root)
-        .join("speckit")
-        .join("schemas")
-        .join(schema_name)
-        .join("schema.yaml");
-    if project_schema.exists() {
+    if get_schema_dir(schema_name, project_root).is_some() {
         return Ok(schema_name.to_string());
-    }
-
-    // Check for user-local schema
-    if let Some(config_dir) = dirs::config_dir() {
-        let user_schema = config_dir
-            .join("speckit")
-            .join("schemas")
-            .join(schema_name)
-            .join("schema.yaml");
-        if user_schema.exists() {
-            return Ok(schema_name.to_string());
-        }
-    }
-
-    // Check for package-bundled schema
-    if let Ok(exe_path) = std::env::current_exe() {
-        if let Some(exe_dir) = exe_path.parent() {
-            let pkg_schema = exe_dir
-                .join("schemas")
-                .join(schema_name)
-                .join("schema.yaml");
-            if pkg_schema.exists() {
-                return Ok(schema_name.to_string());
-            }
-        }
     }
 
     let available = list_schemas(project_root);
@@ -303,26 +272,70 @@ pub fn list_schemas(project_root: &str) -> Vec<String> {
     let mut schemas = Vec::new();
     let mut seen = std::collections::HashSet::new();
 
-    // Project schemas
-    let project_schemas_dir = Path::new(project_root).join("speckit").join("schemas");
-    collect_schema_names(&project_schemas_dir, &mut schemas, &mut seen);
+    collect_schema_names(
+        &Path::new(project_root).join("speckit").join("schemas"),
+        &mut schemas,
+        &mut seen,
+    );
 
-    // User schemas
     if let Some(config_dir) = dirs::config_dir() {
-        let user_schemas_dir = config_dir.join("speckit").join("schemas");
-        collect_schema_names(&user_schemas_dir, &mut schemas, &mut seen);
+        collect_schema_names(
+            &config_dir.join("speckit").join("schemas"),
+            &mut schemas,
+            &mut seen,
+        );
     }
 
-    // Package schemas
-    if let Ok(exe_path) = std::env::current_exe() {
-        if let Some(exe_dir) = exe_path.parent() {
-            let pkg_schemas_dir = exe_dir.join("schemas");
-            collect_schema_names(&pkg_schemas_dir, &mut schemas, &mut seen);
-        }
+    if let Some(package_dir) = get_package_schemas_dir() {
+        collect_schema_names(&package_dir, &mut schemas, &mut seen);
     }
 
     schemas.sort();
     schemas
+}
+
+/// Get the schema directory path for a given schema name.
+pub fn get_schema_dir(schema_name: &str, project_root: &str) -> Option<String> {
+    let project_dir = Path::new(project_root)
+        .join("speckit")
+        .join("schemas")
+        .join(schema_name);
+    if project_dir.join("schema.yaml").exists() {
+        return Some(project_dir.to_string_lossy().to_string());
+    }
+
+    if let Some(config_dir) = dirs::config_dir() {
+        let user_dir = config_dir.join("speckit").join("schemas").join(schema_name);
+        if user_dir.join("schema.yaml").exists() {
+            return Some(user_dir.to_string_lossy().to_string());
+        }
+    }
+
+    let package_dir = get_package_schemas_dir()?.join(schema_name);
+    package_dir
+        .join("schema.yaml")
+        .exists()
+        .then(|| package_dir.to_string_lossy().to_string())
+}
+
+/// Locates schemas shipped with the CLI package.
+///
+/// Release archives and npm platform packages place `schemas/` next to the
+/// native binary. Walking ancestors additionally supports `cargo run`, whose
+/// executable lives below the repository root.
+fn get_package_schemas_dir() -> Option<PathBuf> {
+    if let Ok(dir) = std::env::var("SPECKIT_SCHEMAS_DIR") {
+        let path = PathBuf::from(dir);
+        if path.is_dir() {
+            return Some(path);
+        }
+    }
+
+    let exe = std::env::current_exe().ok()?;
+    exe.ancestors()
+        .skip(1)
+        .map(|dir| dir.join("schemas"))
+        .find(|candidate| candidate.is_dir())
 }
 
 fn collect_schema_names(
@@ -335,43 +348,10 @@ fn collect_schema_names(
             if entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
                 let name = entry.file_name().to_string_lossy().to_string();
                 let schema_file = entry.path().join("schema.yaml");
-                if schema_file.exists() && !seen.contains(&name) {
-                    seen.insert(name.clone());
+                if schema_file.exists() && seen.insert(name.clone()) {
                     schemas.push(name);
                 }
             }
         }
     }
-}
-
-/// Get the schema directory path for a given schema name.
-pub fn get_schema_dir(schema_name: &str, project_root: &str) -> Option<String> {
-    // Project schemas first
-    let project_dir = Path::new(project_root)
-        .join("speckit")
-        .join("schemas")
-        .join(schema_name);
-    if project_dir.join("schema.yaml").exists() {
-        return Some(project_dir.to_string_lossy().to_string());
-    }
-
-    // User schemas
-    if let Some(config_dir) = dirs::config_dir() {
-        let user_dir = config_dir.join("speckit").join("schemas").join(schema_name);
-        if user_dir.join("schema.yaml").exists() {
-            return Some(user_dir.to_string_lossy().to_string());
-        }
-    }
-
-    // Package schemas
-    if let Ok(exe_path) = std::env::current_exe() {
-        if let Some(exe_dir) = exe_path.parent() {
-            let pkg_dir = exe_dir.join("schemas").join(schema_name);
-            if pkg_dir.join("schema.yaml").exists() {
-                return Some(pkg_dir.to_string_lossy().to_string());
-            }
-        }
-    }
-
-    None
 }

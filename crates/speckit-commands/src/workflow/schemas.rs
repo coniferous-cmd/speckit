@@ -147,7 +147,9 @@ fn parse_schema_info(content: &str) -> (String, Vec<String>) {
 
     for line in content.lines() {
         let trimmed = line.trim();
-        if let Some(desc) = trimmed.strip_prefix("description:") {
+        if description.is_empty()
+            && let Some(desc) = trimmed.strip_prefix("description:")
+        {
             description = desc.trim().trim_matches('"').to_string();
         }
         if let Some(id) = trimmed.strip_prefix("- id:") {

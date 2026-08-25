@@ -47,8 +47,11 @@ pub enum SchemaSource {
 
 /// Gets the package's built-in schemas directory path.
 ///
-/// In the Rust port, this is determined by the `SPECKIT_SCHEMAS_DIR` environment
-/// variable, or falls back to a relative path from the binary.
+/// This follows the same package-resource model as OpenSpec: built-in schemas
+/// ship in a `schemas/` directory beside the executable. `SPECKIT_SCHEMAS_DIR`
+/// remains available for embedders and package managers that install resources
+/// elsewhere. During Cargo development and tests we also walk up from the test
+/// binary so the repository-root `schemas/` directory is discovered.
 pub fn get_package_schemas_dir() -> Option<PathBuf> {
     if let Ok(dir) = std::env::var("SPECKIT_SCHEMAS_DIR") {
         let path = PathBuf::from(dir);
@@ -56,19 +59,13 @@ pub fn get_package_schemas_dir() -> Option<PathBuf> {
             return Some(path);
         }
     }
-    // Fallback: look for schemas/ relative to the binary
+    // Packaged installations place schemas beside the executable. Walking
+    // ancestors also makes `cargo run` and `cargo test` find `<repo>/schemas`.
     if let Ok(exe) = std::env::current_exe() {
-        if let Some(parent) = exe.parent() {
+        for parent in exe.ancestors().skip(1) {
             let candidate = parent.join("schemas");
             if candidate.is_dir() {
                 return Some(candidate);
-            }
-            // Try one more level up (common for cargo target/debug/)
-            if let Some(grandparent) = parent.parent() {
-                let candidate = grandparent.join("schemas");
-                if candidate.is_dir() {
-                    return Some(candidate);
-                }
             }
         }
     }
@@ -359,5 +356,12 @@ mod tests {
             get_project_schemas_dir(root),
             PathBuf::from("/home/user/project/speckit/schemas")
         );
+    }
+
+    #[test]
+    fn package_includes_spec_driven_schema() {
+        let schemas_dir = get_package_schemas_dir().expect("package schemas directory");
+        assert!(schemas_dir.join("spec-driven/schema.yaml").is_file());
+        assert!(list_schemas(None).contains(&"spec-driven".to_string()));
     }
 }
