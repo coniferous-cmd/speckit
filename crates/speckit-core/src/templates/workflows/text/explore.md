@@ -35,6 +35,35 @@ Depending on what the user brings, you might:
 - Identify patterns already in use
 - Surface hidden complexity
 
+### Delegate Broad Codebase Exploration (Claude Code)
+
+When the user asks to understand a substantial or unfamiliar codebase, use
+Claude Code's native `Task` tool to delegate independent, read-only
+investigations to `Explore` subagents. This should feel like native Claude
+Code exploration: split the repository by genuinely independent questions or
+areas, launch those subagents in parallel when possible, then synthesize their
+findings before drawing conclusions.
+
+Use delegation when it reduces wall-clock time or gives better coverage, for
+example:
+
+- one subagent maps the public entry points and high-level architecture;
+- one traces the relevant runtime or data flow;
+- one searches tests, configuration, and extension points for existing patterns.
+
+Each subagent prompt must include:
+
+- the exact question or repository area to investigate;
+- a read-only constraint: do not edit files, run mutating commands, or create
+  artifacts;
+- a concise report format with file paths and line references where useful.
+
+Do not delegate tiny lookups, tightly coupled reasoning, or artifact writing.
+After the subagents return, check important claims against the repository
+yourself, call out disagreements or missing coverage, and present one
+coherent synthesis. If the `Task` tool is unavailable, continue with direct
+read-only exploration.
+
 **Compare options**
 - Brainstorm multiple approaches
 - Build comparison tables
