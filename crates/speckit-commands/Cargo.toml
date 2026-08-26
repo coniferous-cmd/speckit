@@ -20,3 +20,6 @@ chrono = { workspace = true }
 regex = { workspace = true }
 dirs = { workspace = true }
 speckit-core = { path = "../speckit-core" }
+
+[dev-dependencies]
+tempfile = { workspace = true }

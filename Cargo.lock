@@ -1159,6 +1159,7 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "speckit-core",
+ "tempfile",
  "thiserror",
  "tokio",
 ]

@@ -388,7 +388,7 @@ pub fn parity_fixture_hashes() -> std::collections::HashMap<&'static str, &'stat
     let entries: [(&'static str, &'static str); 12] = [
         (
             "speckit-explore",
-            "a3569a81a92b3f6d0fc044a01d76032ce6b8d09e0710ad8c3b932a2922e9454f",
+            "88e1612ff9ad4aa0322cc73015efbec006dd66cfc94086cba4910be24c094deb",
         ),
         (
             "speckit-new-change",

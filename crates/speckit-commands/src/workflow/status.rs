@@ -126,7 +126,6 @@ async fn detect_artifact_status(change_dir: &std::path::Path) -> Vec<ArtifactSta
     let proposal = change_dir.join("proposal.md");
     let design = change_dir.join("design.md");
     let tasks = change_dir.join("tasks.md");
-    let specs_dir = change_dir.join("specs");
 
     artifacts.push(ArtifactStatusEntry {
         id: "proposal".to_string(),
@@ -138,28 +137,17 @@ async fn detect_artifact_status(change_dir: &std::path::Path) -> Vec<ArtifactSta
         missing_deps: None,
     });
 
-    let specs_status = if read_skip_specs_marker(change_dir).unwrap_or(false) {
-        "skipped"
-    } else if specs_dir.is_dir() {
-        // Check if any .md files exist
-        let has_specs = std::fs::read_dir(&specs_dir)
-            .ok()
-            .map(|mut rd| {
-                rd.any(|e| {
-                    e.ok()
-                        .map(|e| e.path().extension().map(|ext| ext == "md").unwrap_or(false))
-                        .unwrap_or(false)
-                })
-            })
-            .unwrap_or(false);
-        if has_specs { "done" } else { "ready" }
-    } else {
-        "ready"
-    };
+    let specs_skipped = read_skip_specs_marker(change_dir).unwrap_or(false);
 
     artifacts.push(ArtifactStatusEntry {
         id: "specs".to_string(),
-        status: specs_status.to_string(),
+        status: if specs_skipped {
+            "skipped".to_string()
+        } else if has_markdown_file_recursively(&change_dir.join("specs")) {
+            "done".to_string()
+        } else {
+            "ready".to_string()
+        },
         missing_deps: None,
     });
 
@@ -246,5 +234,47 @@ fn print_status_text(status: &ChangeStatusOutput) {
     if status.is_planning_complete {
         println!();
         println!("\x1b[32mAll planning artifacts complete!\x1b[0m");
+    }
+}
+
+/// Returns whether `dir` contains at least one Markdown file at any depth.
+fn has_markdown_file_recursively(dir: &std::path::Path) -> bool {
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(_) => return false,
+    };
+
+    entries.flatten().any(|entry| {
+        let path = entry.path();
+        if path.is_dir() {
+            has_markdown_file_recursively(&path)
+        } else {
+            path.is_file()
+                && path
+                    .extension()
+                    .is_some_and(|extension| extension.eq_ignore_ascii_case("md"))
+        }
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    #[tokio::test]
+    async fn nested_spec_file_is_reported_as_done() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let nested_specs = temp_dir.path().join("specs").join("device-type-service");
+        fs::create_dir_all(&nested_specs).unwrap();
+        fs::write(nested_specs.join("spec.md"), "content").unwrap();
+
+        let artifacts = detect_artifact_status(temp_dir.path()).await;
+        let specs = artifacts
+            .iter()
+            .find(|artifact| artifact.id == "specs")
+            .unwrap();
+
+        assert_eq!(specs.status, "done");
     }
 }
