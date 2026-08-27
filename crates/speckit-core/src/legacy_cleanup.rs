@@ -164,6 +164,7 @@ pub fn detect_legacy_artifacts(project_path: &Path) -> Result<LegacyDetectionRes
     // Detect legacy slash command directories
     let legacy_command_dirs = [
         (".claude/commands/opsx", "claude"),
+        (".claude/commands/speckit", "claude"),
         (".codebuddy/commands/speckit", "codebuddy"),
         (".qoder/commands/speckit", "qoder"),
         (".lingma/commands/speckit", "lingma"),
@@ -476,6 +477,7 @@ pub fn get_tools_from_legacy_artifacts(detection: &LegacyDetectionResult) -> Vec
     // Map known legacy dirs back to tool ids
     let dir_to_tool: std::collections::HashMap<&str, &str> = [
         (".claude/commands/opsx", "claude"),
+        (".claude/commands/speckit", "claude"),
         (".codebuddy/commands/speckit", "codebuddy"),
         (".qoder/commands/speckit", "qoder"),
         (".lingma/commands/speckit", "lingma"),
@@ -546,6 +548,7 @@ pub fn omit_tool_legacy_artifacts(
     let skip: HashSet<&str> = tool_ids.iter().map(|s| s.as_str()).collect();
     let dir_to_tool: std::collections::HashMap<&str, &str> = [
         (".claude/commands/opsx", "claude"),
+        (".claude/commands/speckit", "claude"),
         (".codebuddy/commands/speckit", "codebuddy"),
         (".qoder/commands/speckit", "qoder"),
         (".lingma/commands/speckit", "lingma"),

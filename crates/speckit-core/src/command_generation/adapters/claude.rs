@@ -1,7 +1,7 @@
 //! Claude Code Command Adapter
 //!
 //! Formats commands for Claude Code following its frontmatter specification.
-//! File path: .claude/commands/speckit/<id>.md
+//! File path: .claude/commands/specx/<id>.md
 //! Frontmatter: name, description, allowed-tools, category, tags
 
 use crate::command_generation::types::{CommandContent, ToolCommandAdapter};
@@ -22,7 +22,7 @@ impl ToolCommandAdapter for ClaudeAdapter {
     }
 
     fn get_file_path(&self, command_id: &str) -> String {
-        format!(".claude/commands/speckit/{}.md", command_id)
+        format!(".claude/commands/specx/{}.md", command_id)
     }
 
     fn format_file(&self, content: &CommandContent) -> String {
@@ -67,10 +67,10 @@ mod tests {
     }
 
     #[test]
-    fn commands_are_written_to_the_speckit_namespace() {
+    fn commands_are_written_to_the_specx_namespace() {
         assert_eq!(
             ClaudeAdapter.get_file_path("apply"),
-            ".claude/commands/speckit/apply.md"
+            ".claude/commands/specx/apply.md"
         );
     }
 
