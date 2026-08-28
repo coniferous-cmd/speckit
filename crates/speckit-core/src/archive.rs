@@ -863,7 +863,6 @@ mod tests {
     fn archive_spec_update_preview() {
         let tmp = setup_temp_dir();
         let changes = tmp.path().join("speckit").join("changes");
-        let specs = tmp.path().join("speckit").join("specs");
         let change_dir = changes.join("preview-change");
         fs::create_dir_all(&change_dir).unwrap();
 

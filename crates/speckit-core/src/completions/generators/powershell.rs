@@ -39,7 +39,6 @@ Register-ArgumentCompleter -Native -CommandName {binary_name} -ScriptBlock {{
         @{{Name="archive";Description="Archive a completed change"}}
         @{{Name="validate";Description="Validate changes and specs"}}
         @{{Name="show";Description="Show a change or spec"}}
-        @{{Name="feedback";Description="Submit feedback"}}
         @{{Name="completion";Description="Manage shell completions"}}
         @{{Name="status";Description="Display artifact completion status"}}
         @{{Name="instructions";Description="Output enriched instructions"}}

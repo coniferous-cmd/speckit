@@ -111,7 +111,7 @@ impl Validator {
     }
 
     /// Apply spec validation rules.
-    fn apply_spec_rules(&self, spec: &Spec, content: &str) -> Vec<ValidationIssue> {
+    fn apply_spec_rules(&self, spec: &Spec, _content: &str) -> Vec<ValidationIssue> {
         let mut issues = Vec::new();
 
         // Check spec name
@@ -206,7 +206,7 @@ impl Validator {
     }
 
     /// Apply change validation rules.
-    fn apply_change_rules(&self, change: &Change, content: &str) -> Vec<ValidationIssue> {
+    fn apply_change_rules(&self, change: &Change, _content: &str) -> Vec<ValidationIssue> {
         let mut issues = Vec::new();
 
         // Check change name

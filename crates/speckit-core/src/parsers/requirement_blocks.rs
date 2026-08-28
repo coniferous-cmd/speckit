@@ -112,14 +112,6 @@ static RENAME_FROM: LazyLock<Regex> = LazyLock::new(|| {
 static RENAME_TO: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)^\s*-?\s*TO:\s*`?###\s*Requirement:\s*(.+?)`?\s*$").unwrap());
 
-/// Matches an `## ADDED/MODIFIED/REMOVED/RENAMED Requirements` header.
-static DELTA_SECTION_HEADER: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?i)^##\s+(ADDED|MODIFIED|REMOVED|RENAMED)\s+Requirements\s*$").unwrap()
-});
-
-/// Matches any `## ` header (top-level section boundary).
-static H2_HEADER: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^##\s+").unwrap());
-
 /// Matches a `### ...` header (level 3).
 static H3_HEADER: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^###\s+(.+?)\s*$").unwrap());
 

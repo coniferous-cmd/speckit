@@ -342,38 +342,6 @@ pub fn get_opsx_propose_command_template() -> CommandTemplate {
 }
 
 // ---------------------------------------------------------------------------
-// Feedback (not part of the canonical 12-workflow registry, kept for legacy)
-// ---------------------------------------------------------------------------
-
-pub fn get_feedback_skill_template() -> SkillTemplate {
-    SkillTemplate {
-        name: "feedback".into(),
-        description: "Collect and submit user feedback about Speckit with context enrichment and anonymization.".into(),
-        instructions: r#"Help the user submit feedback about Speckit.
-
-**Goal**: Guide the user through collecting, enriching, and submitting feedback while ensuring privacy through anonymization.
-
-**Process**
-
-1. **Gather context from the conversation**
-2. **Draft enriched feedback** - clear title, body with context
-3. **Anonymize sensitive information** - paths, tokens, company names
-4. **Present draft for approval**
-5. **Submit on confirmation** - `speckit feedback "title" --body "body content"`
-
-**Guardrails**
-- MUST show complete draft before submitting
-- MUST ask for explicit approval
-- MUST anonymize sensitive information
-- DO NOT submit without user confirmation"#
-            .into(),
-        license: Some("MIT".into()),
-        compatibility: Some("Requires speckit CLI.".into()),
-        metadata: Some(speckit_metadata()),
-    }
-}
-
-// ---------------------------------------------------------------------------
 // Shared helpers
 // ---------------------------------------------------------------------------
 

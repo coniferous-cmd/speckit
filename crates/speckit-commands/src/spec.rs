@@ -6,8 +6,6 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use crate::shared_output::StoreDiagnostic;
-
 /// Options for the spec show command.
 #[derive(Debug, Clone)]
 pub struct SpecShowOptions {

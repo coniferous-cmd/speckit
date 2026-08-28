@@ -209,7 +209,7 @@ pub fn build_upgrade_command_lines(install_dir: Option<&Path>) -> Vec<String> {
 }
 
 /// Display the CLI update note.
-pub fn display_cli_update_note(latest_version: &str, project_path: &Path) {
+pub fn display_cli_update_note(latest_version: &str, _project_path: &Path) {
     let install_dir = get_install_dir();
     let lines = build_cli_update_lines(latest_version, install_dir.as_deref());
 
@@ -220,7 +220,7 @@ pub fn display_cli_update_note(latest_version: &str, project_path: &Path) {
 }
 
 /// Display just the upgrade command.
-pub fn display_upgrade_command(project_path: &Path) {
+pub fn display_upgrade_command(_project_path: &Path) {
     let install_dir = get_install_dir();
     let lines = build_upgrade_command_lines(install_dir.as_deref());
     for line in &lines {

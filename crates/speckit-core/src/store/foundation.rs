@@ -90,12 +90,6 @@ pub fn is_valid_store_id(id: &str) -> bool {
 // Path helpers
 // ---------------------------------------------------------------------------
 
-fn global_data_dir() -> PathBuf {
-    dirs::data_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join("speckit")
-}
-
 /// Returns the directory that holds all registered store entries.
 pub fn get_stores_dir(global_data_dir: Option<&Path>) -> PathBuf {
     let base = global_data_dir
@@ -391,7 +385,7 @@ pub fn read_optional_store_metadata_state(
 ) -> Result<Option<StoreMetadataState>, StoreError> {
     match read_store_metadata_state(store_root) {
         Ok(state) => Ok(Some(state)),
-        Err(e)
+        Err(_e)
             if std::io::Error::new(std::io::ErrorKind::NotFound, "")
                 .to_string()
                 .is_empty() =>

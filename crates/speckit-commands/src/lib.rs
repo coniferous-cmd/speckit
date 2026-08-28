@@ -8,7 +8,6 @@ pub mod completion;
 pub mod config;
 pub mod context;
 pub mod doctor;
-pub mod feedback;
 pub mod init;
 pub mod schema;
 pub mod shared_gather;

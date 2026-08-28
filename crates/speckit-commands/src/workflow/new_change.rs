@@ -6,8 +6,7 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use super::shared::{DEFAULT_SCHEMA, print_json, status_from_error, validate_schema_exists};
-use crate::shared_output::StoreDiagnostic;
+use super::shared::{DEFAULT_SCHEMA, print_json, validate_schema_exists};
 
 // -----------------------------------------------------------------------------
 // Types

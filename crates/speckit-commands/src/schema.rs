@@ -6,7 +6,6 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use crate::shared_output::StoreDiagnostic;
 use crate::workflow::shared::{get_schema_dir, list_schemas};
 
 /// A schema location for output.

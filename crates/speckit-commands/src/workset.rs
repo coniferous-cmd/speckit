@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::shared_output::{StoreDiagnostic, emit_failure, print_json};
+use crate::shared_output::{emit_failure, print_json};
 
 /// A workset definition.
 #[derive(Debug, Clone, Serialize, Deserialize)]

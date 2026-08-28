@@ -30,7 +30,6 @@ complete -c {binary_name} -n '__fish_use_subcommand' -a 'store' -d 'Manage store
 complete -c {binary_name} -n '__fish_use_subcommand' -a 'doctor' -d 'Run diagnostics'
 complete -c {binary_name} -n '__fish_use_subcommand' -a 'context' -d 'Manage context'
 complete -c {binary_name} -n '__fish_use_subcommand' -a 'workset' -d 'Manage worksets'
-complete -c {binary_name} -n '__fish_use_subcommand' -a 'feedback' -d 'Submit feedback'
 
 # Global options
 complete -c {binary_name} -l 'no-color' -d 'Disable color output'

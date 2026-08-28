@@ -29,7 +29,6 @@ _{binary_name}() {{
         'doctor:Run diagnostics'
         'context:Manage context'
         'workset:Manage worksets'
-        'feedback:Submit feedback'
     )
 
     _arguments -C \

@@ -43,23 +43,3 @@ pub struct Requirement {
     #[validate(custom(function = "validate_scenarios"))]
     pub scenarios: Vec<Scenario>,
 }
-
-/// Spec metadata.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SpecMetadata {
-    pub version: String,
-    pub format: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub source_path: Option<String>,
-}
-
-/// Change metadata.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ChangeMetadata {
-    pub version: String,
-    pub format: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub source_path: Option<String>,
-}

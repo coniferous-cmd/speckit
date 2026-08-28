@@ -6,8 +6,8 @@ use speckit_core::root_selection::{
 };
 
 use speckit_commands::{
-    archive, change, completion, config, context, doctor, feedback, init, schema, shared_output,
-    show, spec, store, update, validate, view, workflow, workset,
+    archive, change, completion, config, context, doctor, init, schema, shared_output, show, spec,
+    store, update, validate, view, workflow, workset,
 };
 
 /// Speckit - AI-native system for spec-driven development
@@ -245,15 +245,6 @@ enum Commands {
         /// Store ID
         #[arg(long)]
         store: Option<String>,
-    },
-
-    /// Submit feedback about Speckit
-    Feedback {
-        /// Feedback message
-        message: String,
-        /// Detailed description for the feedback
-        #[arg(long)]
-        body: Option<String>,
     },
 
     /// Manage shell completions for Speckit CLI
@@ -1194,10 +1185,6 @@ async fn main() {
                 },
             )
             .await
-        }
-
-        Commands::Feedback { message, body } => {
-            feedback::feedback_command(&message, body.as_deref()).await
         }
 
         Commands::Completion { command } => match command {

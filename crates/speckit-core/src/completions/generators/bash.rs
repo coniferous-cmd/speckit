@@ -15,7 +15,7 @@ _{binary_name}_completions() {{
     cur="${{COMP_WORDS[COMP_CWORD]}}"
     prev="${{COMP_WORDS[COMP_CWORD-1]}}"
 
-    commands="init list show validate archive update status instructions templates schemas new completion config schema store doctor context workset feedback"
+    commands="init list show validate archive update status instructions templates schemas new completion config schema store doctor context workset"
 
     if [[ ${{cur}} == -* || ${{COMP_CWORD}} -eq 1 ]] ; then
         COMPREPLY=( $(compgen -W "${{commands}}" -- "${{cur}}") )

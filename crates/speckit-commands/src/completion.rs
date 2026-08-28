@@ -2,10 +2,6 @@
 //!
 //! Manage shell completions for the Speckit CLI.
 
-use serde::{Deserialize, Serialize};
-
-use crate::shared_output::StoreDiagnostic;
-
 /// Supported shells for completion generation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SupportedShell {
@@ -184,7 +180,7 @@ _speckit_completions()
     COMPREPLY=()
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
-    commands="init update list view change archive validate show feedback completion status instructions templates schemas new spec config schema store doctor context workset"
+    commands="init update list view change archive validate show completion status instructions templates schemas new spec config schema store doctor context workset"
 
     if [[ ${cur} == -* ]] ; then
         COMPREPLY=( $(compgen -W "--help --version --no-color" -- ${cur}) )
@@ -203,7 +199,7 @@ complete -F _speckit_completions speckit
 
 _speckit() {
     _arguments \
-        '1:command:(init update list view change archive validate show feedback completion status instructions templates schemas new spec config schema store doctor context workset)' \
+        '1:command:(init update list view change archive validate show completion status instructions templates schemas new spec config schema store doctor context workset)' \
         '*::arg:->args'
 }
 
@@ -219,7 +215,6 @@ complete -c speckit -n '__fish_use_subcommand' -a list -d 'List items'
 complete -c speckit -n '__fish_use_subcommand' -a view -d 'Display an interactive dashboard'
 complete -c speckit -n '__fish_use_subcommand' -a validate -d 'Validate changes and specs'
 complete -c speckit -n '__fish_use_subcommand' -a show -d 'Show a change or spec'
-complete -c speckit -n '__fish_use_subcommand' -a feedback -d 'Submit feedback'
 complete -c speckit -n '__fish_use_subcommand' -a status -d 'Display artifact completion status'
 complete -c speckit -n '__fish_use_subcommand' -a doctor -d 'Report relationship health'
 complete -c speckit -n '__fish_use_subcommand' -a context -d 'Print the working context'

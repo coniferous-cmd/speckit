@@ -6,8 +6,6 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::shared_output::StoreDiagnostic;
-
 /// Global configuration.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct GlobalConfig {
@@ -172,7 +170,7 @@ pub fn config_set(
     force_string: bool,
     _allow_unknown: bool,
 ) -> anyhow::Result<()> {
-    let mut config = get_global_config();
+    let config = get_global_config();
     let mut config_value = serde_json::to_value(&config)?;
     let coerced = coerce_value(value, force_string);
 
@@ -191,7 +189,7 @@ pub fn config_set(
 
 /// Execute the config unset command.
 pub fn config_unset(key: &str) -> anyhow::Result<()> {
-    let mut config = get_global_config();
+    let config = get_global_config();
     let mut config_value = serde_json::to_value(&config)?;
 
     let existed = delete_nested_value(&mut config_value, key);

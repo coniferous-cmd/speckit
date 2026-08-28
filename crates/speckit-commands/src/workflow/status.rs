@@ -7,7 +7,6 @@ use serde::{Deserialize, Serialize};
 use super::shared::{
     ArtifactStatus, DEFAULT_SCHEMA, get_available_changes, print_json, validate_change_exists,
 };
-use crate::shared_output::StoreDiagnostic;
 use speckit_core::change_metadata::read_skip_specs_marker;
 
 // -----------------------------------------------------------------------------

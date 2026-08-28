@@ -6,11 +6,8 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use crate::shared_gather::{
-    ReferenceIndexEntry, assemble_reference_index, gather_relationship_data, read_project_config,
-    read_registry_snapshot,
-};
-use crate::shared_output::{StoreDiagnostic, emit_failure, print_json};
+use crate::shared_gather::gather_relationship_data;
+use crate::shared_output::{StoreDiagnostic, print_json};
 
 /// Working set: the complete context for a root.
 #[derive(Debug, Clone, Serialize, Deserialize)]

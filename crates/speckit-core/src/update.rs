@@ -443,7 +443,7 @@ impl UpdateCommand {
         };
         // Out-of-registry skill (different name) -> managed by another tool,
         // leave alone.
-        if !parsed.name.starts_with("speckit-") && parsed.name != "feedback" {
+        if !parsed.name.starts_with("speckit-") {
             return Ok(false);
         }
         if !expected_workflow_contains(&parsed.name, expected_workflow) {

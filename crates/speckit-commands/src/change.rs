@@ -2,14 +2,12 @@
 //!
 //! Manage Speckit change proposals. (Deprecated: prefer verb-first commands.)
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
 use speckit_core::root_selection::{ResolveSpeckitRootOptions, resolve_speckit_root};
 use speckit_core::validation::{ValidationLevel, Validator};
-
-use crate::shared_output::StoreDiagnostic;
 
 /// Options for the change show command.
 #[derive(Debug, Clone)]
@@ -313,7 +311,7 @@ pub async fn change_validate(
 }
 
 /// Validate a change directory.
-async fn validate_change(name: &str, change_dir: &Path, strict: bool) -> ChangeValidationReport {
+async fn validate_change(_name: &str, change_dir: &Path, strict: bool) -> ChangeValidationReport {
     let mut issues = Vec::new();
 
     let proposal_path = change_dir.join("proposal.md");

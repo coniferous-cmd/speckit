@@ -385,8 +385,6 @@ pub fn register_store(input: &RegisterStoreInput) -> Result<ResolvedStore, Store
         },
         cwd,
     )?;
-    let store_root = get_store_root(&backend);
-
     let committed = commit_store_registration(&CommitStoreRegistrationInput {
         id,
         backend,

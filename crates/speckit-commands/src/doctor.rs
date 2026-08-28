@@ -5,7 +5,7 @@
 use serde::{Deserialize, Serialize};
 use speckit_core::root_selection::{ResolveSpeckitRootOptions, resolve_speckit_root};
 
-use crate::shared_gather::{ReferenceIndexEntry, StoreDiagnostic, gather_relationship_data};
+use crate::shared_gather::{StoreDiagnostic, gather_relationship_data};
 use crate::shared_output::print_json;
 
 /// Health report for the Speckit root.

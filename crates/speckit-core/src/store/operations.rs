@@ -614,8 +614,6 @@ pub fn setup_prepared_store(
     let kind = prepared.root_kind;
     let registry = &prepared.registry;
     let git_enabled = init_git.unwrap_or_else(|| !is_registered_at_path(registry, id, store_root));
-    let already_registered = is_registered_at_path(registry, id, store_root);
-
     // Re-assert that the path didn't appear while we waited.
     if kind == MISSING && store_root.exists() {
         return Err(StoreError::new(

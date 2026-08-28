@@ -268,7 +268,6 @@ struct DeltaSpec {
     added: Vec<DeltaRequirement>,
     modified: Vec<DeltaRequirement>,
     removed: Vec<String>,
-    renamed: Vec<(String, String)>,
 }
 
 /// A single requirement from a delta.
@@ -282,7 +281,6 @@ fn parse_delta_spec(content: &str) -> DeltaSpec {
     let mut added = Vec::new();
     let mut modified = Vec::new();
     let mut removed = Vec::new();
-    let mut renamed = Vec::new();
 
     let mut current_section: Option<String> = None;
     let mut current_block = String::new();
@@ -380,16 +378,6 @@ fn parse_delta_spec(content: &str) -> DeltaSpec {
                 if !name.is_empty() {
                     removed.push(name);
                 }
-            } else if section == "RENAMED" && trimmed.starts_with("- ") {
-                // Parse "old -> new" format
-                let parts: Vec<&str> = trimmed
-                    .strip_prefix("- ")
-                    .unwrap_or(trimmed)
-                    .split(" -> ")
-                    .collect();
-                if parts.len() == 2 {
-                    renamed.push((parts[0].trim().to_string(), parts[1].trim().to_string()));
-                }
             } else if !current_name.is_empty() {
                 current_block.push_str(line);
                 current_block.push('\n');
@@ -410,7 +398,6 @@ fn parse_delta_spec(content: &str) -> DeltaSpec {
         added,
         modified,
         removed,
-        renamed,
     }
 }
 

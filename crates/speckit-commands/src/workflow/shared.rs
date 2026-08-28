@@ -8,7 +8,6 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::shared_gather::ReferenceIndexEntry;
-use crate::shared_output::StoreDiagnostic;
 
 // -----------------------------------------------------------------------------
 // Types

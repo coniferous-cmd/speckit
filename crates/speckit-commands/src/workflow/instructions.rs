@@ -8,13 +8,12 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 use super::shared::{
-    ApplyInstructions, ApplyProgress, ArchiveInstructions, DEFAULT_SCHEMA, TaskItem,
-    get_available_changes, print_json, validate_change_exists, validate_schema_exists,
+    ApplyInstructions, ApplyProgress, ArchiveInstructions, DEFAULT_SCHEMA, TaskItem, print_json,
+    validate_change_exists, validate_schema_exists,
 };
 use crate::shared_gather::{
     ReferenceIndexEntry, assemble_reference_index, read_project_config, read_registry_snapshot,
 };
-use crate::shared_output::StoreDiagnostic;
 
 // -----------------------------------------------------------------------------
 // Types
@@ -492,7 +491,7 @@ pub async fn generate_apply_instructions(
     }
     let specs_dir = change_dir.join("specs");
     if specs_dir.is_dir() {
-        if let Ok(mut rd) = std::fs::read_dir(&specs_dir) {
+        if let Ok(rd) = std::fs::read_dir(&specs_dir) {
             let specs: Vec<String> = rd
                 .filter_map(|e| e.ok())
                 .filter(|e| e.path().extension().map(|ext| ext == "md").unwrap_or(false))
