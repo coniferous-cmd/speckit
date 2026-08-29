@@ -33,7 +33,7 @@ static NUMBERED_GROUP_HEADING: LazyLock<Regex> =
 
 /// Matches a task ID at the start of a description: `1.2.3A` etc.
 static TASK_ID: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^(\d+(?:\.\d+)+(?:[A-Za-z]+)?)(?:(?=\s)|$)").unwrap());
+    LazyLock::new(|| Regex::new(r"^(\d+(?:\.\d+)+(?:[A-Za-z]+)?)(?:\s|$)").unwrap());
 
 /// Matches a Markdown task (checkbox) line: `- [ ] ...` or `* [x] ...`.
 static TASK_LINE_PATTERN: LazyLock<Regex> =
@@ -154,4 +154,33 @@ pub fn find_task_numbering_issues(documents: &[TaskNumberingDocument]) -> Vec<Ta
     }
 
     issues
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn document(content: &str) -> TaskNumberingDocument {
+        TaskNumberingDocument {
+            path: "tasks.md".to_string(),
+            content: content.to_string(),
+        }
+    }
+
+    #[test]
+    fn recognizes_task_ids_followed_by_whitespace_or_end_of_line() {
+        let issues = find_task_numbering_issues(&[document(
+            "## 1. Group\n- [ ] 1.1 First task\n- [ ] 1.2A",
+        )]);
+
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn does_not_match_task_ids_with_non_boundary_suffixes() {
+        let issues =
+            find_task_numbering_issues(&[document("## 1. Group\n- [ ] 1.1: Not a task ID")]);
+
+        assert!(issues.is_empty());
+    }
 }
