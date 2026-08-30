@@ -242,7 +242,7 @@ jobs:
           npm whoami
           echo "---"
           echo "Can list @coniferous-cmd packages?"
-          npm access ls-packages @coniferous-cmd
+          npm access list packages @coniferous-cmd
           echo "---"
           echo "Already-published versions of @coniferous-cmd/speckit-darwin-arm64:"
           npm view @coniferous-cmd/speckit-darwin-arm64 versions --json
