@@ -68,13 +68,23 @@ jobs:
         if: ${{ !matrix.cross }}
         run: cargo build --release --target ${{ matrix.target }} -p speckit
 
+      - name: Stage release artifacts
+        # Mirror the binary and schemas into a flat directory so the artifact
+        # layout is predictable across upload-artifact versions. Multiple
+        # upload paths with no common ancestor can otherwise place the binary
+        # at an unexpected path inside the artifact, breaking the downstream
+        # tar/zip/cp steps that expect `speckit` (or `speckit.exe`) and
+        # `schemas/` directly under the artifact root.
+        run: |
+          mkdir -p staging
+          cp target/${{ matrix.target }}/release/${{ matrix.binary }} staging/
+          cp -R schemas staging/
+
       - name: Upload artifact
         uses: actions/upload-artifact@v6
         with:
           name: speckit-${{ matrix.platform }}
-          path: |
-            target/${{ matrix.target }}/release/${{ matrix.binary }}
-            schemas
+          path: staging/
           if-no-files-found: error
 
   create-release:
