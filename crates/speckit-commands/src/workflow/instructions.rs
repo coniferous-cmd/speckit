@@ -238,8 +238,8 @@ async fn build_artifact_instructions(
         artifact_id: artifact_id.to_string(),
         change_name: change_name.to_string(),
         schema_name: schema_name.to_string(),
-        change_dir: change_dir.to_string(),
-        resolved_output_path: resolved_output.to_string_lossy().to_string(),
+        change_dir: change_dir.replace('\\', "/"),
+        resolved_output_path: resolved_output.to_string_lossy().replace('\\', "/"),
         description: description.to_string(),
         instruction: if is_blocked {
             "Complete the dependencies above before creating this artifact.".to_string()
@@ -486,7 +486,7 @@ pub async fn generate_apply_instructions(
     if proposal.exists() {
         context_files.insert(
             "proposal".to_string(),
-            vec![proposal.to_string_lossy().to_string()],
+            vec![proposal.to_string_lossy().replace('\\', "/")],
         );
     }
     let specs_dir = change_dir.join("specs");
@@ -495,7 +495,7 @@ pub async fn generate_apply_instructions(
             let specs: Vec<String> = rd
                 .filter_map(|e| e.ok())
                 .filter(|e| e.path().extension().map(|ext| ext == "md").unwrap_or(false))
-                .map(|e| e.path().to_string_lossy().to_string())
+                .map(|e| e.path().to_string_lossy().replace('\\', "/"))
                 .collect();
             if !specs.is_empty() {
                 context_files.insert("specs".to_string(), specs);
@@ -506,7 +506,7 @@ pub async fn generate_apply_instructions(
     if design.exists() {
         context_files.insert(
             "design".to_string(),
-            vec![design.to_string_lossy().to_string()],
+            vec![design.to_string_lossy().replace('\\', "/")],
         );
     }
 
@@ -549,7 +549,7 @@ pub async fn generate_apply_instructions(
 
     Ok(ApplyInstructions {
         change_name: change_name.to_string(),
-        change_dir: change_dir.to_string_lossy().to_string(),
+        change_dir: change_dir.to_string_lossy().replace('\\', "/"),
         schema_name: schema.to_string(),
         context_files,
         progress: ApplyProgress {
