@@ -245,7 +245,9 @@ jobs:
           npm access list packages @coniferous-cmd
           echo "---"
           echo "Already-published versions of @coniferous-cmd/speckit-darwin-arm64:"
-          npm view @coniferous-cmd/speckit-darwin-arm64 versions --json
+          # 404 is expected on the very first release before any package has been
+          # published — surface a friendly note instead of failing the whole step.
+          npm view @coniferous-cmd/speckit-darwin-arm64 versions --json 2>/dev/null || echo "(not yet published — first release)"
 
       - name: Publish platform packages
         run: |
