@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 pub const MAX_CONTEXT_SIZE: usize = 50 * 1024;
 
 /// Operation identifiers used as keys in the `operations:` map.
-pub const OPERATION_IDS: &[&str] = &["apply", "archive"];
+pub const OPERATION_IDS: &[&str] = &["implement", "archive"];
 
 /// Advisory guidance for a single operation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -287,6 +287,14 @@ fn parse_operations(raw: &serde_yaml::Value) -> Option<OperationsConfig> {
             serde_yaml::Value::String(s) => s.as_str(),
             _ => continue,
         };
+
+        if operation_id == "apply" {
+            eprintln!(
+                "The `operations.apply` key has been renamed to `operations.implement`. \
+                 Please update your speckit config."
+            );
+            continue;
+        }
 
         if !supported.contains(operation_id) {
             eprintln!(
@@ -793,7 +801,7 @@ mod tests {
 
     #[test]
     fn load_operation_inputs_empty_config() {
-        let inputs = load_operation_inputs(None, "apply");
+        let inputs = load_operation_inputs(None, "implement");
         assert!(inputs.context.is_none());
         assert!(inputs.operation_guidance.is_none());
     }
@@ -809,7 +817,7 @@ mod tests {
             github_copilot: None,
             references: None,
         };
-        let inputs = load_operation_inputs(Some(&config), "apply");
+        let inputs = load_operation_inputs(Some(&config), "implement");
         assert_eq!(inputs.context.as_deref(), Some("My project context"));
     }
 
@@ -817,7 +825,7 @@ mod tests {
     fn load_operation_inputs_with_guidance() {
         let mut operations = OperationsConfig::new();
         operations.insert(
-            "apply".into(),
+            "implement".into(),
             OperationConfig {
                 guidance: Some(vec!["Keep it short".into()]),
             },
@@ -831,7 +839,7 @@ mod tests {
             github_copilot: None,
             references: None,
         };
-        let inputs = load_operation_inputs(Some(&config), "apply");
+        let inputs = load_operation_inputs(Some(&config), "implement");
         assert_eq!(
             inputs.operation_guidance,
             Some(vec!["Keep it short".into()])

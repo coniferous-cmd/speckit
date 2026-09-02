@@ -3,7 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 
-use super::schema::{parse_schema, SchemaValidationError};
+use super::schema::{SchemaValidationError, parse_schema};
 use super::types::SchemaYaml;
 
 /// Error thrown when loading a schema from disk fails.
@@ -79,11 +79,7 @@ pub fn get_package_schemas_dir() -> Option<PathBuf> {
 pub fn get_user_schemas_dir() -> Option<PathBuf> {
     let data_dir = dirs::data_dir()?;
     let path = data_dir.join("speckit").join("schemas");
-    if path.is_dir() {
-        Some(path)
-    } else {
-        None
-    }
+    if path.is_dir() { Some(path) } else { None }
 }
 
 /// Gets the project-local schemas directory path.
@@ -189,7 +185,10 @@ pub fn get_schema_dir(name: &str, project_root: Option<&Path>) -> Option<PathBuf
 /// Resolves a schema name to a `SchemaYaml` object.
 ///
 /// Resolution order is the same as `get_schema_dir`.
-pub fn resolve_schema(name: &str, project_root: Option<&Path>) -> Result<SchemaYaml, SchemaLoadError> {
+pub fn resolve_schema(
+    name: &str,
+    project_root: Option<&Path>,
+) -> Result<SchemaYaml, SchemaLoadError> {
     // Normalize name (remove .yaml extension if provided)
     let normalized = name
         .strip_suffix(".yaml")

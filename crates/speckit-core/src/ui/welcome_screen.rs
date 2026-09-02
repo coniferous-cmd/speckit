@@ -291,10 +291,10 @@ mod tests {
 
     #[test]
     fn get_welcome_text_with_workflows() {
-        let workflows = vec!["explore".to_string(), "apply".to_string()];
+        let workflows = vec!["explore".to_string(), "implement".to_string()];
         let text = get_welcome_text(&workflows);
         assert!(text.iter().any(|l| l.contains("explore")));
-        assert!(text.iter().any(|l| l.contains("apply")));
+        assert!(text.iter().any(|l| l.contains("implement")));
     }
 
     #[test]

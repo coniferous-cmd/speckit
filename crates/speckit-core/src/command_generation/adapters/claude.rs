@@ -69,14 +69,14 @@ mod tests {
     #[test]
     fn commands_are_written_to_the_specx_namespace() {
         assert_eq!(
-            ClaudeAdapter.get_file_path("apply"),
-            ".claude/commands/specx/apply.md"
+            ClaudeAdapter.get_file_path("implement"),
+            ".claude/commands/specx/implement.md"
         );
     }
 
     #[test]
     fn other_commands_keep_their_existing_allowlist() {
-        let rendered = ClaudeAdapter.format_file(&command("apply"));
+        let rendered = ClaudeAdapter.format_file(&command("implement"));
 
         assert!(rendered.contains("allowed-tools: Bash(speckit:*)\n"));
         assert!(!rendered.contains("allowed-tools: Bash(speckit:*), Task\n"));

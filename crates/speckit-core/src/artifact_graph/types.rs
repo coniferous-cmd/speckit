@@ -24,20 +24,20 @@ pub struct Artifact {
     pub requires: Vec<String>,
 }
 
-/// Apply phase configuration for schema-aware apply instructions.
+/// Implement phase configuration for schema-aware implement instructions.
 ///
-/// Defines which artifacts must exist before the apply (implementation) phase
+/// Defines which artifacts must exist before the implement phase
 /// is available, and optionally tracks progress via a checkbox file.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ApplyPhase {
-    /// Artifact IDs that must exist before apply is available.
+pub struct ImplementPhase {
+    /// Artifact IDs that must exist before implement is available.
     pub requires: Vec<String>,
     /// Path to a file with checkboxes for progress tracking (relative to
     /// change dir), or `None` if no tracking is needed.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tracks: Option<String>,
-    /// Custom guidance for the apply phase.
+    /// Custom guidance for the implement phase.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub instruction: Option<String>,
 }
@@ -58,9 +58,9 @@ pub struct SchemaYaml {
     pub description: Option<String>,
     /// Ordered list of artifact definitions.
     pub artifacts: Vec<Artifact>,
-    /// Optional apply phase configuration.
+    /// Optional implement phase configuration.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub apply: Option<ApplyPhase>,
+    pub implement: Option<ImplementPhase>,
 }
 
 /// A set of completed artifact IDs, used for tracking change progress.
@@ -94,9 +94,9 @@ mod tests {
     }
 
     #[test]
-    fn apply_phase_deserialization_with_optionals() {
+    fn implement_phase_deserialization_with_optionals() {
         let json = r#"{"requires": ["proposal", "specs"]}"#;
-        let phase: ApplyPhase = serde_json::from_str(json).unwrap();
+        let phase: ImplementPhase = serde_json::from_str(json).unwrap();
         assert_eq!(phase.requires.len(), 2);
         assert!(phase.tracks.is_none());
         assert!(phase.instruction.is_none());
@@ -120,7 +120,7 @@ mod tests {
         assert_eq!(schema.name, "spec-driven");
         assert_eq!(schema.version, 1);
         assert_eq!(schema.artifacts.len(), 1);
-        assert!(schema.apply.is_none());
+        assert!(schema.implement.is_none());
     }
 
     #[test]

@@ -47,7 +47,7 @@ pub fn get_invocation_for_adapter(adapter: &dyn ToolCommandAdapter) -> CommandIn
 
 /// Spells one command the way the tool registers it.
 ///
-/// Returns what the user types, e.g. `/opsx:apply`, `/opsx-apply`, `@opsx-apply`
+/// Returns what the user types, e.g. `/opsx:implement`, `/opsx-implement`, `@opsx-implement`
 pub fn format_command_invocation(invocation: &CommandInvocation, command_id: &str) -> String {
     let separator = match invocation.style {
         CommandInvocationStyle::Namespaced => ":",
@@ -69,7 +69,7 @@ const KNOWN_COMMAND_IDS: &[&str] = &[
     "explore",
     "new",
     "continue",
-    "apply",
+    "implement",
     "update",
     "ff",
     "sync",

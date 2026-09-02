@@ -33,7 +33,10 @@ pub fn get_skill_templates(workflow_filter: Option<&[String]>) -> Vec<SkillTempl
             "continue",
             super::workflows::get_continue_change_skill_template(),
         ),
-        entry("apply", super::workflows::get_apply_change_skill_template()),
+        entry(
+            "implement",
+            super::workflows::get_implement_change_skill_template(),
+        ),
         entry(
             "update",
             super::workflows::get_update_change_skill_template(),
@@ -99,7 +102,10 @@ pub fn get_command_templates(workflow_filter: Option<&[String]>) -> Vec<CommandT
             "continue",
             super::workflows::get_opsx_continue_command_template(),
         ),
-        cmd_entry("apply", super::workflows::get_opsx_apply_command_template()),
+        cmd_entry(
+            "implement",
+            super::workflows::get_opsx_implement_command_template(),
+        ),
         cmd_entry(
             "update",
             super::workflows::get_opsx_update_command_template(),
@@ -399,16 +405,16 @@ pub fn parity_fixture_hashes() -> std::collections::HashMap<&'static str, &'stat
             "0aade44dd759630a49de80a6f9de546620655892d3d9d115fd043de14b03febc",
         ),
         (
-            "speckit-apply-change",
-            "6b5ef0f6130f82eae145227db7d5f967654850fb2878a022fa81957b5554f2ea",
+            "speckit-implement-change",
+            "17aaa43f2b81110ef4e89e3f1a45fc89ee5cb7f34cf98d2c287b5066f9ca1df2",
         ),
         (
             "speckit-update-change",
-            "e28c0d7196a20a167bb7732108decab964e1493ecbfeff94d117c24b011c8fa5",
+            "70ed063740386a196a65442ebd5ddfc619d9c880c8d288f131010e1684c5c950",
         ),
         (
             "speckit-ff-change",
-            "ed537e6aa0696c76f471b21ae5c31bcd13867dc61e8695a58b1fe45ef85b7778",
+            "9170b4a8e301cfe5f45ef520b7cc9c325b7b75e10383b3236de0073028b9eda1",
         ),
         (
             "speckit-sync-specs",
@@ -424,15 +430,15 @@ pub fn parity_fixture_hashes() -> std::collections::HashMap<&'static str, &'stat
         ),
         (
             "speckit-verify-change",
-            "e947a2f19344b49c30eee655caf8f44dad1accdb9b524a31bcfaf72250ce8722",
+            "8f9a255e656830a32491b03fa898bace87901652f3746683f899ebace0a19e38",
         ),
         (
             "speckit-onboard",
-            "470190876e10cae692f62c2ea02e2be0195b5edd572603a97a069f6cb1694e08",
+            "3b68bef27442febc399b31a849359fcf871a166920d77dff4dc8d4b1ed2cce4f",
         ),
         (
             "speckit-propose",
-            "f042cc05799239510e7bd3deb7a7df8d51b52437a66a45c760226eb1e095eb1f",
+            "793074e2188902a48405f6458d1eaf41d71eb7bdf9961a81a6f0b208de89ba7c",
         ),
     ];
     entries.into_iter().collect()
@@ -466,12 +472,12 @@ mod tests {
 
     #[test]
     fn get_skill_templates_filter_returns_subset() {
-        let filter = vec!["explore".to_string(), "apply".to_string()];
+        let filter = vec!["explore".to_string(), "implement".to_string()];
         let picked = get_skill_templates(Some(&filter));
         assert_eq!(picked.len(), 2);
         let ids: Vec<&str> = picked.iter().map(|e| e.workflow_id.as_str()).collect();
         assert!(ids.contains(&"explore"));
-        assert!(ids.contains(&"apply"));
+        assert!(ids.contains(&"implement"));
     }
 
     #[test]

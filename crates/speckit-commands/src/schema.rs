@@ -590,6 +590,17 @@ fn validate_schema_dir(schema_dir: &str, verbose: bool) -> (bool, Vec<SchemaVali
         }
     };
 
+    // Keep CLI schema validation aligned with runtime loading. In particular,
+    // the runtime parser rejects removed top-level workflow keys such as
+    // `apply:` instead of silently ignoring them.
+    if let Err(error) = speckit_core::artifact_graph::parse_schema(&content) {
+        issues.push(SchemaValidationIssue {
+            level: "error".to_string(),
+            path: "schema.yaml".to_string(),
+            message: error.to_string(),
+        });
+    }
+
     // Check for required fields
     if schema.get("name").is_none() {
         issues.push(SchemaValidationIssue {
@@ -656,10 +667,23 @@ fn build_schema_yaml(name: &str, description: &str, artifact_ids: &[String]) -> 
     }
 
     if artifact_ids.contains(&"tasks".to_string()) {
-        yaml.push_str("apply:\n  requires:\n    - tasks\n  tracks: tasks.md\n");
+        yaml.push_str("implement:\n  requires:\n    - tasks\n  tracks: tasks.md\n");
     }
 
     yaml
+}
+
+#[cfg(test)]
+mod tests {
+    use super::build_schema_yaml;
+
+    #[test]
+    fn generated_schema_uses_implement_phase() {
+        let yaml = build_schema_yaml("test", "A test schema", &["tasks".into()]);
+
+        assert!(yaml.contains("implement:\n"));
+        assert!(!yaml.contains("apply:"));
+    }
 }
 
 /// Create default template content for an artifact.

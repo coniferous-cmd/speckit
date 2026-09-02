@@ -39,7 +39,9 @@ impl ArtifactGraph {
     }
 
     /// Creates an `ArtifactGraph` from a YAML content string.
-    pub fn from_yaml_content(yaml_content: &str) -> Result<Self, super::schema::SchemaValidationError> {
+    pub fn from_yaml_content(
+        yaml_content: &str,
+    ) -> Result<Self, super::schema::SchemaValidationError> {
         let schema = parse_schema(yaml_content)?;
         Ok(Self::from_schema(schema))
     }
@@ -52,7 +54,12 @@ impl ArtifactGraph {
     /// Returns a reference to all artifacts, in declaration order.
     pub fn get_all_artifacts(&self) -> Vec<&Artifact> {
         let mut artifacts: Vec<&Artifact> = self.schema.artifacts.iter().collect();
-        artifacts.sort_by_key(|a| self.declaration_order.get(&a.id).copied().unwrap_or(usize::MAX));
+        artifacts.sort_by_key(|a| {
+            self.declaration_order
+                .get(&a.id)
+                .copied()
+                .unwrap_or(usize::MAX)
+        });
         artifacts
     }
 

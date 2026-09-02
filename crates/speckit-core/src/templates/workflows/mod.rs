@@ -1,7 +1,7 @@
 //! Workflow template modules for Speckit skills and slash commands.
 //!
 //! Each public function returns a `SkillTemplate` or `CommandTemplate` for one
-//! of the Speckit workflow operations (explore, new, continue, apply, etc.).
+//! of the Speckit workflow operations (explore, new, continue, implement, etc.).
 //!
 //! Instruction bodies are loaded from `text/<workflow>.md` via `include_str!`
 //! so the canonical text is loaded directly. Do not duplicate or rewrite this text
@@ -10,13 +10,13 @@
 use super::types::{CommandTemplate, SkillTemplate};
 
 // ---------------------------------------------------------------------------
-// Apply (shared instructions used by both skill and command surfaces)
+// Implement (shared instructions used by both skill and command surfaces)
 // ---------------------------------------------------------------------------
 
-/// Shared apply workflow instructions. The body is loaded from
-/// `text/apply-change.md` and reused by the skill and command surfaces.
-pub fn get_apply_instructions() -> String {
-    include_str!("text/apply-change.md").to_string()
+/// Shared implement workflow instructions. The body is loaded from
+/// `text/implement-change.md` and reused by the skill and command surfaces.
+pub fn get_implement_instructions() -> String {
+    include_str!("text/implement-change.md").to_string()
 }
 
 // ---------------------------------------------------------------------------
@@ -103,27 +103,27 @@ pub fn get_opsx_continue_command_template() -> CommandTemplate {
 }
 
 // ---------------------------------------------------------------------------
-// Apply Change
+// Implement Change
 // ---------------------------------------------------------------------------
 
-pub fn get_apply_change_skill_template() -> SkillTemplate {
+pub fn get_implement_change_skill_template() -> SkillTemplate {
     SkillTemplate {
-        name: "speckit-apply-change".into(),
+        name: "speckit-implement-change".into(),
         description: "Implement tasks from an Speckit change.".into(),
-        instructions: get_apply_instructions(),
+        instructions: get_implement_instructions(),
         license: Some("MIT".into()),
         compatibility: Some("Requires speckit CLI.".into()),
         metadata: Some(speckit_metadata()),
     }
 }
 
-pub fn get_opsx_apply_command_template() -> CommandTemplate {
+pub fn get_opsx_implement_command_template() -> CommandTemplate {
     CommandTemplate {
-        name: "SPECKIT: Apply".into(),
+        name: "SPECKIT: Implement".into(),
         description: "Implement tasks from an Speckit change (Experimental)".into(),
         category: "Workflow".into(),
         tags: vec!["workflow".into(), "artifacts".into(), "experimental".into()],
-        content: get_apply_instructions(),
+        content: get_implement_instructions(),
     }
 }
 

@@ -36,7 +36,7 @@ fn registry_workflow_ids_are_stable() {
         "explore",
         "new",
         "continue",
-        "apply",
+        "implement",
         "update",
         "ff",
         "sync",
@@ -92,7 +92,7 @@ fn all_canonical_workflow_helpers_return_distinct_templates() {
     let explore = workflows::get_explore_skill_template();
     let new = workflows::get_new_change_skill_template();
     let continue_ = workflows::get_continue_change_skill_template();
-    let apply = workflows::get_apply_change_skill_template();
+    let implement = workflows::get_implement_change_skill_template();
     let update = workflows::get_update_change_skill_template();
     let ff = workflows::get_ff_change_skill_template();
     let sync = workflows::get_sync_specs_skill_template();
@@ -105,7 +105,7 @@ fn all_canonical_workflow_helpers_return_distinct_templates() {
         explore.name.as_str(),
         new.name.as_str(),
         continue_.name.as_str(),
-        apply.name.as_str(),
+        implement.name.as_str(),
         update.name.as_str(),
         ff.name.as_str(),
         sync.name.as_str(),
@@ -258,14 +258,14 @@ fn generated_by_uses_running_cli_version() {
 fn workflow_filter_returns_only_listed() {
     let filter = vec![
         "explore".to_string(),
-        "apply".to_string(),
+        "implement".to_string(),
         "propose".to_string(),
     ];
     let picked = get_skill_templates(Some(&filter));
     assert_eq!(picked.len(), 3);
     let ids: Vec<&str> = picked.iter().map(|e| e.workflow_id.as_str()).collect();
     assert!(ids.contains(&"explore"));
-    assert!(ids.contains(&"apply"));
+    assert!(ids.contains(&"implement"));
     assert!(ids.contains(&"propose"));
 }
 
@@ -614,14 +614,14 @@ fn every_template_has_consistent_license_and_compatibility() {
 }
 
 #[test]
-fn apply_instructions_match_apply_skill_body() {
-    // The apply workflow body is shared between skill and command templates to
+fn implement_instructions_match_implement_skill_body() {
+    // The implement workflow body is shared between skill and command templates to
     // prevent the two surfaces from drifting. Pin that here.
-    let apply = workflows::get_apply_change_skill_template();
-    let shared = workflows::get_apply_instructions();
+    let implement = workflows::get_implement_change_skill_template();
+    let shared = workflows::get_implement_instructions();
     assert_eq!(
-        apply.instructions, shared,
-        "apply skill template must reuse get_apply_instructions()"
+        implement.instructions, shared,
+        "implement skill template must reuse get_implement_instructions()"
     );
 }
 
@@ -634,7 +634,7 @@ fn registry_covers_every_workflow_helper() {
         workflows::get_explore_skill_template,
         workflows::get_new_change_skill_template,
         workflows::get_continue_change_skill_template,
-        workflows::get_apply_change_skill_template,
+        workflows::get_implement_change_skill_template,
         workflows::get_update_change_skill_template,
         workflows::get_ff_change_skill_template,
         workflows::get_sync_specs_skill_template,

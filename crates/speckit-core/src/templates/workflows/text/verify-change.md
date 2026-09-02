@@ -31,7 +31,7 @@ Verify that an implementation matches the change artifacts (specs, tasks, design
 3. **Get planning context and load artifacts**
 
    ```bash
-   speckit instructions apply --change "<name>" --json
+   speckit instructions implement --change "<name>" --json
    ```
 
    This returns the change directory and `contextFiles` (artifact ID -> array of concrete file paths). Read all available artifacts from `contextFiles`.

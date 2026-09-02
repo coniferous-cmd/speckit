@@ -33,14 +33,14 @@ pub struct TaskItem {
     pub done: bool,
 }
 
-/// Instructions for applying (implementing) a change's tasks.
+/// Instructions for implementing a change's tasks.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ApplyInstructions {
+pub struct ImplementInstructions {
     pub change_name: String,
     pub change_dir: String,
     pub schema_name: String,
     pub context_files: std::collections::HashMap<String, Vec<String>>,
-    pub progress: ApplyProgress,
+    pub progress: ImplementProgress,
     pub tasks: Vec<TaskItem>,
     pub state: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -54,9 +54,9 @@ pub struct ApplyInstructions {
     pub operation_guidance: Option<Vec<String>>,
 }
 
-/// Progress tracking for apply instructions.
+/// Progress tracking for implement instructions.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ApplyProgress {
+pub struct ImplementProgress {
     pub total: usize,
     pub complete: usize,
     pub remaining: usize,

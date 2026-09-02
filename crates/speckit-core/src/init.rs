@@ -571,6 +571,14 @@ impl InitCommand {
                 .iter()
                 .filter_map(|v| v.as_str().map(ToOwned::to_owned))
                 .collect::<Vec<_>>();
+            // Check for deprecated "apply" workflow first
+            if selected.iter().any(|wf| wf == "apply") {
+                return Err(anyhow::anyhow!(
+                    "The `apply` workflow has been renamed to `implement`. \
+                     Replace `apply` with `implement` in your custom profile workflows."
+                ));
+            }
+
             let unknown = selected
                 .iter()
                 .filter(|wf| !profiles::ALL_WORKFLOWS.contains(&wf.as_str()))

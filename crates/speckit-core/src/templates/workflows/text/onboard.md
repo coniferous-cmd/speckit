@@ -6,7 +6,7 @@ Guide the user through their first complete Speckit workflow cycle. This is a te
 
 ## Phase 1: Welcome
 
-Walk the user through the canonical Speckit cycle: explore → new change → proposal → specs → design → tasks → apply → archive.
+Walk the user through the canonical Speckit cycle: explore → new change → proposal → specs → design → tasks → implement → archive.
 
 Briefly explain each phase in plain language:
 - **explore** — think before you build
@@ -15,7 +15,7 @@ Briefly explain each phase in plain language:
 - **specs** — define *what the system must do*
 - **design** — capture *how*
 - **tasks** — break implementation into steps
-- **apply** — implement the tasks
+- **implement** — implement the tasks
 - **archive** — finalize and merge
 
 ## Phase 2: Task Selection
@@ -65,9 +65,9 @@ Draft `tasks.md` as an ordered checklist:
 - Scoped to fit in a single sitting
 - Implementable in the chosen order
 
-## Phase 9: Apply (Implementation)
+## Phase 9: Implement
 
-Implement each task in order, checking them off as you go. Run `speckit status --change "<name>"` periodically. Use `speckit instructions apply --change "<name>" --json` if you need the apply context.
+Implement each task in order, checking them off as you go. Run `speckit status --change "<name>"` periodically. Use `speckit instructions implement --change "<name>" --json` if you need the implement context.
 
 If a task surfaces a design issue, pause and offer to revise the artifacts before continuing.
 
@@ -93,7 +93,7 @@ Provide the command reference:
 | Explore        | `/speckit:explore`        |
 | New change     | `/speckit:new`            |
 | Continue       | `/speckit:continue`       |
-| Apply          | `/speckit:apply`          |
+| Implement      | `/speckit:implement`      |
 | Update         | `/speckit:update`         |
 | Sync specs     | `/speckit:sync`           |
 | Archive        | `/speckit:archive`        |

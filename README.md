@@ -5,7 +5,7 @@
 Speckit is a Rust CLI that brings structure to AI-assisted coding. It manages specifications, change proposals, and implementation tasks — giving you and your AI tools a shared, version-controlled contract for every change.
 
 ```
-explore → propose → design → spec → tasks → apply → archive
+explore → propose → design → spec → tasks → implement → archive
 ```
 
 ## Why Speckit?

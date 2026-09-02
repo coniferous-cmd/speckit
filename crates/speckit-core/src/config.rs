@@ -10,7 +10,7 @@ pub const SPECKIT_SKILL_NAMES: &[&str] = &[
     "speckit-explore",
     "speckit-new-change",
     "speckit-continue-change",
-    "speckit-apply-change",
+    "speckit-implement-change",
     "speckit-update-change",
     "speckit-ff-change",
     "speckit-sync-specs",

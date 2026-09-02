@@ -12,7 +12,7 @@ pub mod templates;
 
 // Re-export commonly used items
 pub use instructions::{
-    InstructionsOptions, apply_instructions_command, archive_instructions_command,
+    InstructionsOptions, archive_instructions_command, implement_instructions_command,
     instructions_command,
 };
 pub use new_change::{NewChangeOptions, new_change_command};

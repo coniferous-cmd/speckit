@@ -15,7 +15,7 @@ static COMMAND_TO_SKILL_NAME: LazyLock<HashMap<&'static str, &'static str>> = La
     m.insert("explore", "speckit-explore");
     m.insert("new", "speckit-new-change");
     m.insert("continue", "speckit-continue-change");
-    m.insert("apply", "speckit-apply-change");
+    m.insert("implement", "speckit-implement-change");
     m.insert("update", "speckit-update-change");
     m.insert("ff", "speckit-ff-change");
     m.insert("sync", "speckit-sync-specs");
@@ -54,7 +54,7 @@ pub struct CommandInvocation {
 /// How a tool's commands are named on disk.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InvocationStyle {
-    /// Command named by filename (e.g., `opsx-apply.md` -> `/opsx-apply`).
+    /// Command named by filename (e.g., `opsx-implement.md` -> `/opsx-implement`).
     Flat,
     /// Command in an `opsx/` directory (e.g., `opsx/apply.md` -> `/opsx:apply`).
     Namespaced,
@@ -125,7 +125,7 @@ fn replace_with_skill_references(text: &str, prefix: &str) -> String {
 }
 
 /// Transforms command references to skill references using the default `/`
-/// prefix (e.g., `/speckit-apply-change`).
+/// prefix (e.g., `/speckit-implement-change`).
 pub fn transform_to_skill_references(text: &str) -> String {
     replace_with_skill_references(text, "/")
 }
@@ -221,8 +221,8 @@ mod tests {
 
     #[test]
     fn transform_to_skill_references_basic() {
-        let result = transform_to_skill_references("/opsx:apply");
-        assert_eq!(result, "/speckit-apply-change");
+        let result = transform_to_skill_references("/opsx:implement");
+        assert_eq!(result, "/speckit-implement-change");
     }
 
     #[test]
@@ -233,10 +233,10 @@ mod tests {
 
     #[test]
     fn transform_to_skill_references_multiple() {
-        let result = transform_to_skill_references("Use /opsx:apply and /opsx:archive");
+        let result = transform_to_skill_references("Use /opsx:implement and /opsx:archive");
         assert_eq!(
             result,
-            "Use /speckit-apply-change and /speckit-archive-change"
+            "Use /speckit-implement-change and /speckit-archive-change"
         );
     }
 
@@ -246,8 +246,8 @@ mod tests {
             style: InvocationStyle::Flat,
             prefix: "/".to_string(),
         };
-        let result = transform_command_invocations("/opsx:apply", &inv);
-        assert_eq!(result, "/opsx-apply");
+        let result = transform_command_invocations("/opsx:implement", &inv);
+        assert_eq!(result, "/opsx-implement");
     }
 
     #[test]
@@ -256,16 +256,16 @@ mod tests {
             style: InvocationStyle::Flat,
             prefix: "@".to_string(),
         };
-        let result = transform_command_invocations("/opsx:apply", &inv);
-        assert_eq!(result, "@opsx-apply");
+        let result = transform_command_invocations("/opsx:implement", &inv);
+        assert_eq!(result, "@opsx-implement");
     }
 
     #[test]
     fn transform_codex_compatible() {
-        let result = transform_to_codex_compatible_skill_references("/opsx:apply");
+        let result = transform_to_codex_compatible_skill_references("/opsx:implement");
         assert_eq!(
             result,
-            "$speckit-apply-change (Codex) or /speckit-apply-change (other agents)"
+            "$speckit-implement-change (Codex) or /speckit-implement-change (other agents)"
         );
     }
 
@@ -278,21 +278,21 @@ mod tests {
     #[test]
     fn get_transformer_rovodev() {
         let transformer = get_skill_reference_transformer("rovodev");
-        let result = transformer("/opsx:apply");
-        assert_eq!(result, "the speckit-apply-change skill");
+        let result = transformer("/opsx:implement");
+        assert_eq!(result, "the speckit-implement-change skill");
     }
 
     #[test]
     fn get_transformer_kimi() {
         let transformer = get_skill_reference_transformer("kimi");
-        let result = transformer("/opsx:apply");
-        assert_eq!(result, "/skill:speckit-apply-change");
+        let result = transformer("/opsx:implement");
+        assert_eq!(result, "/skill:speckit-implement-change");
     }
 
     #[test]
     fn get_transformer_codex() {
         let transformer = get_skill_reference_transformer("codex");
-        let result = transformer("/opsx:apply");
-        assert_eq!(result, "$speckit-apply-change");
+        let result = transformer("/opsx:implement");
+        assert_eq!(result, "$speckit-implement-change");
     }
 }

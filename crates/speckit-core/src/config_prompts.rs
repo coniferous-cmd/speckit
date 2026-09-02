@@ -36,12 +36,13 @@ pub fn serialize_config(config: &ProjectConfig) -> String {
 
     // Operation guidance section with comments.
     lines.push("# Per-operation guidance (optional)".into());
-    lines
-        .push("# Add advisory guidance for how apply and archive work should be conducted.".into());
+    lines.push(
+        "# Add advisory guidance for how implement and archive work should be conducted.".into(),
+    );
     lines.push("# This is separate from artifact rules above.".into());
     lines.push("# Example:".into());
     lines.push("#   operations:".into());
-    lines.push("#     apply:".into());
+    lines.push("#     implement:".into());
     lines.push("#       guidance:".into());
     lines.push("#         - Keep test summaries concise".into());
     lines.push("#     archive:".into());

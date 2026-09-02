@@ -50,12 +50,7 @@ pub fn resolve_artifact_outputs(change_dir: &Path, generates: &str) -> Vec<PathB
 }
 
 /// Recursively walks a directory collecting files that match the glob matcher.
-fn walkdir_matches(
-    root: &Path,
-    dir: &Path,
-    glob: &GlobMatcher,
-    results: &mut BTreeSet<PathBuf>,
-) {
+fn walkdir_matches(root: &Path, dir: &Path, glob: &GlobMatcher, results: &mut BTreeSet<PathBuf>) {
     let entries = match fs::read_dir(dir) {
         Ok(e) => e,
         Err(_) => return,

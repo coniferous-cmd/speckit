@@ -23,8 +23,7 @@ pub enum TemplateLoadError {
 }
 
 /// Warning attached to instructions for an artifact skipped via skip_specs.
-pub const SKIP_SPECS_INSTRUCTIONS_WARNING: &str =
-    "This change declares skip_specs: true in .speckit.yaml (no spec-level behavior changes), \
+pub const SKIP_SPECS_INSTRUCTIONS_WARNING: &str = "This change declares skip_specs: true in .speckit.yaml (no spec-level behavior changes), \
      so this artifact is skipped.\n\
      Do not create spec files - they will conflict with that marker. If requirements now change, \
      remove skip_specs from .speckit.yaml and rerun this command.";
@@ -161,8 +160,8 @@ pub struct ChangeStatus {
     pub is_planning_complete: bool,
     /// Compatibility alias for is_planning_complete.
     pub is_complete: bool,
-    /// Artifact IDs required before apply phase.
-    pub apply_requires: Vec<String>,
+    /// Artifact IDs required before implement phase.
+    pub implement_requires: Vec<String>,
     /// Status of each artifact.
     pub artifacts: Vec<ArtifactStatus>,
 }
@@ -173,10 +172,11 @@ pub fn load_template(
     template_path: &str,
     project_root: Option<&Path>,
 ) -> Result<String, TemplateLoadError> {
-    let schema_dir =
-        get_schema_dir(schema_name, project_root).ok_or_else(|| TemplateLoadError::SchemaNotFound {
+    let schema_dir = get_schema_dir(schema_name, project_root).ok_or_else(|| {
+        TemplateLoadError::SchemaNotFound {
             schema: schema_name.to_string(),
-        })?;
+        }
+    })?;
 
     let templates_dir = schema_dir.join("templates");
     let template_full_path = templates_dir.join(template_path);
@@ -204,9 +204,12 @@ pub fn load_change_context(
     schema_name: Option<&str>,
     options: LoadChangeContextOptions,
 ) -> Result<ChangeContext, Box<dyn std::error::Error>> {
-    let change_dir = options
-        .change_dir
-        .unwrap_or_else(|| project_root.join("speckit").join("changes").join(change_name));
+    let change_dir = options.change_dir.unwrap_or_else(|| {
+        project_root
+            .join("speckit")
+            .join("changes")
+            .join(change_name)
+    });
 
     // Schema resolution: explicit > metadata > default
     let resolved_schema_name = schema_name
@@ -262,7 +265,10 @@ fn apply_skip_specs(
     let mut skipped = CompletedSet::new();
     for artifact in graph.get_all_artifacts() {
         // Strip leading `./` to match globs that normalize the path.
-        let generates = artifact.generates.strip_prefix("./").unwrap_or(&artifact.generates);
+        let generates = artifact
+            .generates
+            .strip_prefix("./")
+            .unwrap_or(&artifact.generates);
         if generates.starts_with("specs/") && !completed.contains(&artifact.id) {
             skipped.insert(artifact.id.clone());
         }
@@ -280,22 +286,37 @@ pub fn generate_instructions(
     context: &ChangeContext,
     artifact_id: &str,
 ) -> Result<ArtifactInstructions, Box<dyn std::error::Error>> {
-    let artifact = context
-        .graph
-        .get_artifact(artifact_id)
-        .ok_or_else(|| format!("Artifact '{}' not found in schema '{}'", artifact_id, context.schema_name))?;
+    let artifact = context.graph.get_artifact(artifact_id).ok_or_else(|| {
+        format!(
+            "Artifact '{}' not found in schema '{}'",
+            artifact_id, context.schema_name
+        )
+    })?;
 
-    let template_content = load_template(&context.schema_name, &artifact.template, Some(&context.project_root))?;
-    let dependencies = get_dependency_info(artifact, &context.graph, &context.completed, context.skipped_artifacts.as_ref());
+    let template_content = load_template(
+        &context.schema_name,
+        &artifact.template,
+        Some(&context.project_root),
+    )?;
+    let dependencies = get_dependency_info(
+        artifact,
+        &context.graph,
+        &context.completed,
+        context.skipped_artifacts.as_ref(),
+    );
     let unlocks = get_unlocked_artifacts(&context.graph, artifact_id);
 
-    let resolved_output_path = resolve_artifact_output_path(&context.change_dir, &artifact.generates);
+    let resolved_output_path =
+        resolve_artifact_output_path(&context.change_dir, &artifact.generates);
     let existing_output_paths = resolve_artifact_outputs(&context.change_dir, &artifact.generates);
 
-    let skipped = context
-        .skipped_artifacts
-        .as_ref()
-        .and_then(|s| if s.contains(artifact_id) { Some(true) } else { None });
+    let skipped = context.skipped_artifacts.as_ref().and_then(|s| {
+        if s.contains(artifact_id) {
+            Some(true)
+        } else {
+            None
+        }
+    });
     let warning = if skipped.is_some() {
         Some(SKIP_SPECS_INSTRUCTIONS_WARNING.to_string())
     } else {
@@ -332,8 +353,13 @@ fn get_dependency_info(
         .iter()
         .map(|id| {
             let dep_artifact = graph.get_artifact(id);
-            let skipped = skipped_artifacts
-                .and_then(|s| if s.contains(id.as_str()) { Some(true) } else { None });
+            let skipped = skipped_artifacts.and_then(|s| {
+                if s.contains(id.as_str()) {
+                    Some(true)
+                } else {
+                    None
+                }
+            });
             DependencyInfo {
                 id: id.clone(),
                 done: completed.contains(id.as_str()),
@@ -362,10 +388,10 @@ fn get_unlocked_artifacts(graph: &ArtifactGraph, artifact_id: &str) -> Vec<Strin
 /// Formats the status of all artifacts in a change.
 pub fn format_change_status(context: &ChangeContext) -> ChangeStatus {
     let schema = resolve_schema(&context.schema_name, Some(&context.project_root));
-    let apply_requires = schema
+    let implement_requires = schema
         .as_ref()
         .ok()
-        .and_then(|s| s.apply.as_ref().map(|a| a.requires.clone()))
+        .and_then(|s| s.implement.as_ref().map(|a| a.requires.clone()))
         .unwrap_or_else(|| {
             context
                 .graph
@@ -441,7 +467,7 @@ pub fn format_change_status(context: &ChangeContext) -> ChangeStatus {
         artifact_paths,
         is_planning_complete: is_complete,
         is_complete,
-        apply_requires,
+        implement_requires,
         artifacts: artifact_statuses,
     }
 }
@@ -493,7 +519,11 @@ artifacts:
         assert_eq!(status.schema_name, "test");
         assert!(!status.is_complete);
 
-        let proposal_status = status.artifacts.iter().find(|a| a.id == "proposal").unwrap();
+        let proposal_status = status
+            .artifacts
+            .iter()
+            .find(|a| a.id == "proposal")
+            .unwrap();
         assert_eq!(proposal_status.status, ArtifactStatusKind::Done);
 
         let tasks_status = status.artifacts.iter().find(|a| a.id == "tasks").unwrap();

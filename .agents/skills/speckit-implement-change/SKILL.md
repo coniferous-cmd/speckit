@@ -1,5 +1,5 @@
 ---
-name: speckit-apply-change
+name: speckit-implement-change
 description: Implement tasks from an Speckit change.
 allowed-tools: Bash(speckit:*)
 license: MIT
@@ -25,7 +25,7 @@ Implement tasks from a Speckit change.
    - Auto-select if only one active change exists
    - If ambiguous, run `speckit list --json` to get available changes and ask the user to select one
 
-   Always announce: "Using change: <name>" and how to override (e.g., `/speckit:apply <other>`).
+   Always announce: "Using change: <name>" and how to override (e.g., `/speckit:implement <other>`).
 
 2. **Check status to understand the schema**
    ```bash
@@ -36,10 +36,10 @@ Implement tasks from a Speckit change.
    - `planningHome`, `changeRoot`, and `actionContext`: planning scope and edit constraints
    - Which artifact contains the tasks (typically "tasks" for spec-driven, check status for others)
 
-3. **Get apply instructions**
+3. **Get implement instructions**
 
    ```bash
-   speckit instructions apply --change "<name>" --json
+   speckit instructions implement --change "<name>" --json
    ```
 
    This returns:
@@ -48,7 +48,7 @@ Implement tasks from a Speckit change.
    - Task list with status
    - Dynamic instruction based on current state
    - Optional `context`: current required project instruction input from the selected root
-   - Optional `operationGuidance`: current advisory guidance for apply
+   - Optional `operationGuidance`: current advisory guidance for implement
 
    **Handle states:**
    - If `state: "blocked"` (missing artifacts): show message, suggest using `/speckit:continue` (if it is not installed, run `speckit status --change "<name>" --json` to see the next artifact and `speckit instructions <artifact-id> --change "<name>" --json` for how to create it)
@@ -72,7 +72,7 @@ Implement tasks from a Speckit change.
 
 4. **Read context files**
 
-   Read every file path listed under `contextFiles` from the apply instructions output.
+   Read every file path listed under `contextFiles` from the implement instructions output.
    The files depend on the schema being used:
    - **spec-driven**: proposal, specs, design, tasks
    - Other schemas: follow the contextFiles from CLI output
@@ -165,7 +165,7 @@ What would you like to do?
 
 **Guardrails**
 - Keep going through tasks until done or blocked
-- Always read context files before starting (from the apply instructions output)
+- Always read context files before starting (from the implement instructions output)
 - If task is ambiguous, pause and ask before implementing
 - If implementation reveals issues, pause and suggest artifact updates
 - Keep code changes minimal and scoped to each task

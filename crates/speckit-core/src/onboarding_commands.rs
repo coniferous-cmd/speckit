@@ -35,8 +35,8 @@ fn onboarding_commands() -> Vec<OnboardingCommand> {
             description: "Next artifact".to_string(),
         },
         OnboardingCommand {
-            workflow: "apply".to_string(),
-            command: "/opsx:apply".to_string(),
+            workflow: "implement".to_string(),
+            command: "/opsx:implement".to_string(),
             description: "Implement tasks".to_string(),
         },
     ]
@@ -72,9 +72,9 @@ mod tests {
 
     #[test]
     fn test_get_onboarding_commands_order() {
-        let result = get_onboarding_commands(&["apply", "propose"]);
+        let result = get_onboarding_commands(&["implement", "propose"]);
         assert_eq!(result.len(), 2);
         assert_eq!(result[0].workflow, "propose");
-        assert_eq!(result[1].workflow, "apply");
+        assert_eq!(result[1].workflow, "implement");
     }
 }

@@ -15,22 +15,37 @@ pub enum SchemaValidationError {
     DuplicateId(String),
 
     #[error("Invalid dependency reference in artifact '{artifact}': '{dependency}' does not exist")]
-    InvalidDependency { artifact: String, dependency: String },
+    InvalidDependency {
+        artifact: String,
+        dependency: String,
+    },
 
     #[error("Cyclic dependency detected: {cycle}")]
     CyclicDependency { cycle: String },
+
+    #[error(
+        "The `apply` workflow has been renamed to `implement`. Replace the top-level `apply:` key with `implement:` in your schema."
+    )]
+    DeprecatedApplyKey,
 }
 
 /// Loads and validates an artifact schema from a YAML file.
 pub fn load_schema(file_path: &Path) -> Result<SchemaYaml, SchemaValidationError> {
     let content = fs::read_to_string(file_path).map_err(|e| {
-        SchemaValidationError::ParseError(format!("Failed to read '{}': {}", file_path.display(), e))
+        SchemaValidationError::ParseError(format!(
+            "Failed to read '{}': {}",
+            file_path.display(),
+            e
+        ))
     })?;
     parse_schema(&content)
 }
 
 /// Parses and validates an artifact schema from YAML content.
 pub fn parse_schema(yaml_content: &str) -> Result<SchemaYaml, SchemaValidationError> {
+    // Reject the deprecated `apply` key before deserialization.
+    validate_no_deprecated_apply_key(yaml_content)?;
+
     let schema: SchemaYaml = serde_yaml::from_str(yaml_content)
         .map_err(|e| SchemaValidationError::ParseError(e.to_string()))?;
 
@@ -39,6 +54,26 @@ pub fn parse_schema(yaml_content: &str) -> Result<SchemaYaml, SchemaValidationEr
     validate_no_cycles(&schema.artifacts)?;
 
     Ok(schema)
+}
+
+/// Rejects schemas that contain the deprecated top-level `apply:` key.
+///
+/// The apply workflow has been renamed to implement. Old schemas using `apply:`
+/// must be updated before they can be loaded.
+fn validate_no_deprecated_apply_key(yaml_content: &str) -> Result<(), SchemaValidationError> {
+    // Parse as raw YAML to check for the deprecated key without serde's
+    // default behavior of silently ignoring unknown fields.
+    let raw: serde_yaml::Value = serde_yaml::from_str(yaml_content)
+        .map_err(|e| SchemaValidationError::ParseError(e.to_string()))?;
+
+    if let Some(mapping) = raw.as_mapping() {
+        let apply_key = serde_yaml::Value::String("apply".to_string());
+        if mapping.contains_key(&apply_key) {
+            return Err(SchemaValidationError::DeprecatedApplyKey);
+        }
+    }
+
+    Ok(())
 }
 
 /// Validates that there are no duplicate artifact IDs.
@@ -71,7 +106,8 @@ fn validate_requires_references(artifacts: &[Artifact]) -> Result<(), SchemaVali
 
 /// Validates that there are no cyclic dependencies using DFS.
 fn validate_no_cycles(artifacts: &[Artifact]) -> Result<(), SchemaValidationError> {
-    let artifact_map: HashMap<&str, &Artifact> = artifacts.iter().map(|a| (a.id.as_str(), a)).collect();
+    let artifact_map: HashMap<&str, &Artifact> =
+        artifacts.iter().map(|a| (a.id.as_str(), a)).collect();
     let mut visited = HashSet::new();
     let mut in_stack = HashSet::new();
     let mut parent: HashMap<String, String> = HashMap::new();
@@ -218,12 +254,54 @@ artifacts:
       - a
 "#;
         let err = parse_schema(yaml).unwrap_err();
-        assert!(matches!(err, SchemaValidationError::CyclicDependency { .. }));
+        assert!(matches!(
+            err,
+            SchemaValidationError::CyclicDependency { .. }
+        ));
     }
 
     #[test]
     fn load_schema_missing_file() {
         let err = load_schema(Path::new("/nonexistent/schema.yaml")).unwrap_err();
         assert!(matches!(err, SchemaValidationError::ParseError(_)));
+    }
+
+    #[test]
+    fn reject_deprecated_apply_key() {
+        let yaml = r#"
+name: test
+version: 1
+artifacts:
+  - id: tasks
+    generates: tasks.md
+    description: Tasks
+    template: tasks.md
+apply:
+  requires:
+    - tasks
+"#;
+        let err = parse_schema(yaml).unwrap_err();
+        assert!(matches!(err, SchemaValidationError::DeprecatedApplyKey));
+    }
+
+    #[test]
+    fn reject_deprecated_apply_key_even_with_implement() {
+        let yaml = r#"
+name: test
+version: 1
+artifacts:
+  - id: tasks
+    generates: tasks.md
+    description: Tasks
+    template: tasks.md
+implement:
+  requires:
+    - tasks
+apply:
+  requires:
+    - tasks
+"#;
+        let err = parse_schema(yaml).unwrap_err();
+        assert!(matches!(err, SchemaValidationError::DeprecatedApplyKey));
     }
 }

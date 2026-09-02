@@ -4,7 +4,14 @@ use serde_yaml;
 /// Core workflows included in the `core` profile.
 ///
 /// These provide the streamlined experience for new users.
-pub const CORE_WORKFLOWS: &[&str] = &["propose", "explore", "apply", "update", "sync", "archive"];
+pub const CORE_WORKFLOWS: &[&str] = &[
+    "propose",
+    "explore",
+    "implement",
+    "update",
+    "sync",
+    "archive",
+];
 
 /// All available workflows in the system.
 pub const ALL_WORKFLOWS: &[&str] = &[
@@ -12,7 +19,7 @@ pub const ALL_WORKFLOWS: &[&str] = &[
     "explore",
     "new",
     "continue",
-    "apply",
+    "implement",
     "update",
     "ff",
     "sync",
@@ -175,7 +182,14 @@ mod tests {
         let owned = core_workflow_strings();
         assert_eq!(
             owned,
-            vec!["propose", "explore", "apply", "update", "sync", "archive"]
+            vec![
+                "propose",
+                "explore",
+                "implement",
+                "update",
+                "sync",
+                "archive"
+            ]
         );
     }
 
@@ -187,8 +201,8 @@ mod tests {
 
     #[test]
     fn custom_profile_returns_supplied_workflows() {
-        let custom = vec!["explore".to_string(), "apply".to_string()];
+        let custom = vec!["explore".to_string(), "implement".to_string()];
         let workflows = get_profile_workflows(&Profile::Custom, Some(&custom));
-        assert_eq!(workflows, &["explore", "apply"]);
+        assert_eq!(workflows, &["explore", "implement"]);
     }
 }

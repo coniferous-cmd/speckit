@@ -256,7 +256,7 @@ mod tests {
     fn global_config_json_roundtrip() {
         let cfg = GlobalConfig {
             profile: Profile::Custom,
-            workflows: Some(vec!["explore".into(), "apply".into()]),
+            workflows: Some(vec!["explore".into(), "implement".into()]),
             default_store: Some("my-store".into()),
             ..Default::default()
         };

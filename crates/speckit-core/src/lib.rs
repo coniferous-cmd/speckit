@@ -14,6 +14,7 @@
 //! - [`shared`] — Allowed tools, tool detection, skill paths and generation.
 
 pub mod archive;
+pub mod artifact_graph;
 pub mod available_tools;
 pub mod change_metadata;
 pub mod change_status_policy;

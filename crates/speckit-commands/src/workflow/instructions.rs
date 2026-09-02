@@ -8,8 +8,8 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 use super::shared::{
-    ApplyInstructions, ApplyProgress, ArchiveInstructions, DEFAULT_SCHEMA, TaskItem, print_json,
-    validate_change_exists, validate_schema_exists,
+    ArchiveInstructions, DEFAULT_SCHEMA, ImplementInstructions, ImplementProgress, TaskItem,
+    print_json, validate_change_exists, validate_schema_exists,
 };
 use crate::shared_gather::{
     ReferenceIndexEntry, assemble_reference_index, read_project_config, read_registry_snapshot,
@@ -28,8 +28,8 @@ pub struct InstructionsOptions {
     pub json: bool,
 }
 
-/// Options for the apply instructions command.
-pub type ApplyInstructionsOptions = InstructionsOptions;
+/// Options for the implement instructions command.
+pub type ImplementInstructionsOptions = InstructionsOptions;
 
 /// Options for the archive instructions command.
 pub type ArchiveInstructionsOptions = InstructionsOptions;
@@ -409,12 +409,16 @@ fn print_instructions_text(instructions: &ArtifactInstructions) {
 }
 
 // -----------------------------------------------------------------------------
-// Apply Instructions Command
+// Implement Instructions Command
 // -----------------------------------------------------------------------------
 
-/// Execute the apply instructions command.
-pub async fn apply_instructions_command(options: ApplyInstructionsOptions) -> anyhow::Result<()> {
+/// Execute the implement instructions command.
+pub async fn implement_instructions_command(
+    options: ImplementInstructionsOptions,
+) -> anyhow::Result<()> {
     let project_root = super::resolve_project_root(options.store.as_deref()).await?;
+
+    reject_removed_operation_guidance(&project_root)?;
 
     let change_name = validate_change_exists(
         options.change.as_deref(),
@@ -431,23 +435,44 @@ pub async fn apply_instructions_command(options: ApplyInstructionsOptions) -> an
     validate_schema_exists(&schema_name, &project_root)?;
 
     let instructions =
-        generate_apply_instructions(&project_root, &change_name, Some(&schema_name)).await?;
+        generate_implement_instructions(&project_root, &change_name, Some(&schema_name)).await?;
 
     if options.json {
         print_json(&instructions);
         return Ok(());
     }
 
-    print_apply_instructions_text(&instructions);
+    print_implement_instructions_text(&instructions);
     Ok(())
 }
 
-/// Generate apply instructions for implementing tasks from a change.
-pub async fn generate_apply_instructions(
+/// Reject the removed configuration spelling instead of silently dropping it.
+fn reject_removed_operation_guidance(project_root: &str) -> anyhow::Result<()> {
+    let config_path = Path::new(project_root).join("speckit/config.yaml");
+    let Some(content) = std::fs::read_to_string(config_path).ok() else {
+        return Ok(());
+    };
+    let Ok(raw) = serde_yaml::from_str::<serde_yaml::Value>(&content) else {
+        return Ok(());
+    };
+    if raw
+        .get("operations")
+        .and_then(|operations| operations.get("apply"))
+        .is_some()
+    {
+        anyhow::bail!(
+            "The `operations.apply` key has been removed. Replace it with `operations.implement`."
+        );
+    }
+    Ok(())
+}
+
+/// Generate implement instructions for implementing tasks from a change.
+pub async fn generate_implement_instructions(
     project_root: &str,
     change_name: &str,
     schema_name: Option<&str>,
-) -> anyhow::Result<ApplyInstructions> {
+) -> anyhow::Result<ImplementInstructions> {
     let schema = schema_name.unwrap_or(DEFAULT_SCHEMA);
     let change_dir = Path::new(project_root)
         .join("speckit")
@@ -547,12 +572,12 @@ pub async fn generate_apply_instructions(
         if idx.is_empty() { None } else { Some(idx) }
     };
 
-    Ok(ApplyInstructions {
+    Ok(ImplementInstructions {
         change_name: change_name.to_string(),
         change_dir: change_dir.to_string_lossy().replace('\\', "/"),
         schema_name: schema.to_string(),
         context_files,
-        progress: ApplyProgress {
+        progress: ImplementProgress {
             total,
             complete,
             remaining,
@@ -583,9 +608,9 @@ fn parse_task_lines(content: &str) -> Vec<(usize, bool, String)> {
     tasks
 }
 
-/// Print apply instructions in human-readable format.
-fn print_apply_instructions_text(instructions: &ApplyInstructions) {
-    println!("## Apply: {}", instructions.change_name);
+/// Print implement instructions in human-readable format.
+fn print_implement_instructions_text(instructions: &ImplementInstructions) {
+    println!("## Implement: {}", instructions.change_name);
     println!("Schema: {}", instructions.schema_name);
     println!();
 

@@ -234,6 +234,212 @@ fn change_lifecycle_json_contract_is_available_from_nested_directory() {
 }
 
 #[test]
+fn implement_cli_contract_rejects_apply_and_reports_implement_requires() {
+    let (_temp, project, _nested, config_home, data_home) = fixture();
+    let schema_dir = project.join("speckit/schemas/spec-driven");
+    std::fs::create_dir_all(schema_dir.join("templates")).unwrap();
+    std::fs::write(
+        schema_dir.join("schema.yaml"),
+        "name: spec-driven\nversion: 1\nartifacts:\n  - id: tasks\n    generates: tasks.md\n    description: Tasks\n    template: tasks.md\n    requires: []\nimplement:\n  requires:\n    - tasks\n  tracks: tasks.md\n",
+    )
+    .unwrap();
+    std::fs::write(schema_dir.join("templates/tasks.md"), "# Tasks\n").unwrap();
+
+    let change_dir = project.join("speckit/changes/contract");
+    std::fs::create_dir_all(&change_dir).unwrap();
+    std::fs::write(change_dir.join(".speckit.yaml"), "schema: spec-driven\n").unwrap();
+    std::fs::write(change_dir.join("tasks.md"), "- [x] complete\n").unwrap();
+
+    let status = run_cli(
+        &project,
+        &config_home,
+        &data_home,
+        &["status", "--change", "contract", "--json"],
+    );
+    let status_json = json_stdout(&status);
+    assert_eq!(
+        status_json["implementRequires"],
+        serde_json::json!(["tasks"])
+    );
+    assert!(status_json.get("applyRequires").is_none());
+
+    let instructions = run_cli(
+        &project,
+        &config_home,
+        &data_home,
+        &[
+            "instructions",
+            "implement",
+            "--change",
+            "contract",
+            "--json",
+        ],
+    );
+    let instructions_json = json_stdout(&instructions);
+    assert_eq!(instructions_json["state"], "all_done");
+    assert_eq!(instructions_json["progress"]["complete"], 1);
+
+    let removed = run_cli(
+        &project,
+        &config_home,
+        &data_home,
+        &["instructions", "apply", "--change", "contract"],
+    );
+    assert!(!removed.status.success());
+    assert!(String::from_utf8_lossy(&removed.stderr).contains("renamed to `implement`"));
+
+    std::fs::write(
+        project.join("speckit/config.yaml"),
+        "schema: spec-driven\noperations:\n  apply:\n    guidance: [legacy]\n",
+    )
+    .unwrap();
+    let removed_operation = run_cli(
+        &project,
+        &config_home,
+        &data_home,
+        &["instructions", "implement", "--change", "contract"],
+    );
+    assert!(!removed_operation.status.success());
+    assert!(String::from_utf8_lossy(&removed_operation.stderr).contains("operations.apply"));
+
+    std::fs::write(
+        project.join("speckit/config.yaml"),
+        "schema: spec-driven\nworkflows:\n  - apply\n",
+    )
+    .unwrap();
+    let removed_profile = run_cli(
+        &project,
+        &config_home,
+        &data_home,
+        &[
+            "init",
+            ".",
+            "--tools",
+            "claude",
+            "--profile",
+            "custom",
+            "--force",
+        ],
+    );
+    assert!(!removed_profile.status.success());
+    assert!(String::from_utf8_lossy(&removed_profile.stderr).contains("workflow has been renamed"));
+
+    let generated = run_cli(
+        &project,
+        &config_home,
+        &data_home,
+        &[
+            "schema",
+            "init",
+            "generated-contract",
+            "--artifacts",
+            "tasks",
+            "--no-default",
+            "--json",
+        ],
+    );
+    let generated_json = json_stdout(&generated);
+    let generated_schema = std::fs::read_to_string(
+        generated_json["path"].as_str().unwrap().to_string() + "/schema.yaml",
+    )
+    .unwrap();
+    assert!(generated_schema.contains("implement:\n"));
+    assert!(!generated_schema.contains("apply:"));
+
+    std::fs::write(
+        schema_dir.join("schema.yaml"),
+        "name: spec-driven\nversion: 1\nartifacts: []\napply:\n  requires: []\n",
+    )
+    .unwrap();
+    let invalid_schema = run_cli(
+        &project,
+        &config_home,
+        &data_home,
+        &["schema", "validate", "spec-driven", "--json"],
+    );
+    let invalid_json = json_error(&invalid_schema);
+    assert_eq!(invalid_json["valid"], false);
+    assert!(invalid_json.to_string().contains("renamed to `implement`"));
+}
+
+#[test]
+fn init_and_update_generate_implement_surfaces_for_each_delivery_mode() {
+    let (_temp, project, _nested, config_home, data_home) = fixture();
+    let global_dir = config_home.join("speckit");
+    std::fs::create_dir_all(&global_dir).unwrap();
+    let global_config = global_dir.join("config.json");
+
+    std::fs::write(&global_config, r#"{"delivery":"skills"}"#).unwrap();
+    let skills = run_cli(
+        &project,
+        &config_home,
+        &data_home,
+        &["init", ".", "--tools", "claude", "--force"],
+    );
+    assert!(
+        skills.status.success(),
+        "skills init failed: {}",
+        String::from_utf8_lossy(&skills.stderr)
+    );
+    assert!(
+        project
+            .join(".claude/skills/speckit-implement-change/SKILL.md")
+            .is_file()
+    );
+    assert!(!project.join(".claude/commands/specx/implement.md").exists());
+
+    std::fs::write(&global_config, r#"{"delivery":"commands"}"#).unwrap();
+    let commands_init = run_cli(
+        &project,
+        &config_home,
+        &data_home,
+        &["init", ".", "--tools", "qwen", "--force"],
+    );
+    assert!(
+        commands_init.status.success(),
+        "commands init failed: {}",
+        String::from_utf8_lossy(&commands_init.stderr)
+    );
+    assert!(project.join(".qwen/commands/opsx-implement.md").is_file());
+    assert!(
+        !project
+            .join(".qwen/skills/speckit-implement-change/SKILL.md")
+            .exists()
+    );
+
+    let commands_update = run_cli(
+        &project,
+        &config_home,
+        &data_home,
+        &["update", ".", "--force"],
+    );
+    assert!(
+        commands_update.status.success(),
+        "commands update failed: {}",
+        String::from_utf8_lossy(&commands_update.stderr)
+    );
+
+    std::fs::write(&global_config, r#"{"delivery":"both"}"#).unwrap();
+    let both = run_cli(
+        &project,
+        &config_home,
+        &data_home,
+        &["init", ".", "--tools", "amazon-q", "--force"],
+    );
+    assert!(
+        both.status.success(),
+        "both update failed: {}",
+        String::from_utf8_lossy(&both.stderr)
+    );
+    assert!(
+        project
+            .join(".amazonq/skills/speckit-implement-change/SKILL.md")
+            .is_file()
+    );
+    assert!(project.join(".amazonq/prompts/opsx-implement.md").is_file());
+}
+
+#[test]
 fn change_commands_report_json_errors_without_using_user_configuration() {
     let (_temp, project, _nested, config_home, data_home) = fixture();
 

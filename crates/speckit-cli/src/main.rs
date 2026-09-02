@@ -271,7 +271,7 @@ enum Commands {
 
     /// Output enriched instructions for artifacts
     Instructions {
-        /// Artifact ID (or "apply" / "archive")
+        /// Artifact ID (or "implement" / "archive")
         artifact: Option<String>,
         /// Change name
         #[arg(long)]
@@ -1233,8 +1233,12 @@ async fn main() {
             };
             // Handle reserved sub-surface keywords
             match artifact.as_deref() {
-                Some("apply") => workflow::apply_instructions_command(options).await,
+                Some("implement") => workflow::implement_instructions_command(options).await,
                 Some("archive") => workflow::archive_instructions_command(options).await,
+                Some("apply") => Err(anyhow::anyhow!(
+                    "The `apply` workflow has been renamed to `implement`. \
+                         Use `speckit instructions implement` instead."
+                )),
                 _ => workflow::instructions_command(artifact.as_deref(), options).await,
             }
         }

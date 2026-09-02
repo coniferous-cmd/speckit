@@ -40,6 +40,9 @@ pub struct ChangeStatusOutput {
     pub change_root: Option<String>,
     pub artifacts: Vec<ArtifactStatusEntry>,
     pub is_planning_complete: bool,
+    /// Artifact IDs required before the implementation phase can start.
+    #[serde(rename = "implementRequires")]
+    pub implement_requires: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub root: Option<serde_json::Value>,
 }
@@ -87,6 +90,10 @@ pub async fn status_command(options: StatusOptions) -> anyhow::Result<()> {
 
     // Validate schema exists
     super::shared::validate_schema_exists(&schema_name, &project_root)?;
+    let schema_definition = speckit_core::artifact_graph::resolve_schema(
+        &schema_name,
+        Some(std::path::Path::new(&project_root)),
+    )?;
 
     // Build a minimal status from what we can determine from the filesystem
     let change_dir = std::path::Path::new(&project_root)
@@ -106,6 +113,10 @@ pub async fn status_command(options: StatusOptions) -> anyhow::Result<()> {
         change_root: None,
         artifacts,
         is_planning_complete,
+        implement_requires: schema_definition
+            .implement
+            .map(|phase| phase.requires)
+            .unwrap_or_default(),
         root: None,
     };
 
