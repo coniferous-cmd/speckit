@@ -114,6 +114,17 @@ impl InitCommand {
         let selected_tools = self.resolve_tools_arg().unwrap_or_default();
         let validated_tools = self.validate_tools(&selected_tools, &project_path)?;
 
+        // Migrate legacy workflow IDs in the global config (e.g. apply → implement)
+        // before resolving the profile filter, so the active workflow set reflects
+        // the rename even when the user has a stale `workflows` list.
+        let workflow_renames = crate::migration::migrate_workflow_renames();
+        for rename in &workflow_renames {
+            println!(
+                "Migrated global config: workflow `{}` renamed to `{}`",
+                rename.old, rename.new
+            );
+        }
+
         let (_profile, workflow_filter) = self.resolve_workflow_filter(&project_path)?;
         let workflows = workflow_filter
             .clone()

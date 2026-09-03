@@ -345,3 +345,250 @@ fn remove_dir_if_empty(dir: &Path) -> Result<()> {
     }
     Ok(())
 }
+
+// ── Workflow rename migration ─────────────────────────────────────────────────
+
+/// Records one workflow rename applied to the global config.
+///
+/// Returned from [`migrate_workflow_renames`] so callers can describe what
+/// changed (e.g. for logging).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkflowRename {
+    pub old: &'static str,
+    pub new: &'static str,
+}
+
+/// Legacy workflow IDs and their current equivalents. Extend this table when a
+/// workflow is renamed so future invocations of [`migrate_workflow_renames`]
+/// (and tests using [`migrate_workflow_renames_at`]) handle the rename too.
+const WORKFLOW_RENAMES: &[(&str, &str)] = &[("apply", "implement")];
+
+/// Migrate legacy workflow IDs in the global config's `workflows` array.
+///
+/// Reads `~/.config/speckit/config.json` (or its platform equivalent), renames
+/// any workflow whose ID appears in [`WORKFLOW_RENAMES`], dedupes while
+/// preserving first-occurrence order, and writes the result back. Idempotent:
+/// running on an already-migrated config is a no-op and does not rewrite the
+/// file.
+///
+/// Returns the renames that were actually applied. Empty when:
+/// - the file does not exist (no global config written yet),
+/// - the file is unreadable or malformed JSON (a warning is logged),
+/// - the file has no `workflows` array, or
+/// - no rename matched.
+pub fn migrate_workflow_renames() -> Vec<WorkflowRename> {
+    migrate_workflow_renames_at(&crate::global_config::get_global_config_path())
+}
+
+/// Test seam: same as [`migrate_workflow_renames`] but reads and writes the
+/// supplied path directly. Used by unit tests to avoid mutating the real
+/// global config.
+fn migrate_workflow_renames_at(config_path: &Path) -> Vec<WorkflowRename> {
+    let raw = match fs::read_to_string(config_path) {
+        Ok(content) => content,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Vec::new(),
+        Err(_) => return Vec::new(),
+    };
+
+    let mut parsed: serde_json::Value = match serde_json::from_str(&raw) {
+        Ok(value) => value,
+        Err(_) => {
+            eprintln!(
+                "Warning: invalid JSON in {}; skipping workflow rename migration.",
+                config_path.display()
+            );
+            return Vec::new();
+        }
+    };
+
+    let workflows = match parsed
+        .get_mut("workflows")
+        .and_then(|value| value.as_array_mut())
+    {
+        Some(array) => array,
+        None => return Vec::new(),
+    };
+
+    // Phase 1: rename legacy IDs in place.
+    let mut applied: Vec<WorkflowRename> = Vec::new();
+    for entry in workflows.iter_mut() {
+        let Some(name) = entry.as_str() else { continue };
+        for &(old, new) in WORKFLOW_RENAMES {
+            if name == old {
+                *entry = serde_json::Value::String(new.to_string());
+                applied.push(WorkflowRename { old, new });
+                break;
+            }
+        }
+    }
+
+    if applied.is_empty() {
+        return Vec::new();
+    }
+
+    // Phase 2: dedupe while preserving the order of first occurrence.
+    let mut seen: HashSet<String> = HashSet::new();
+    workflows.retain(|value| match value.as_str() {
+        Some(name) => seen.insert(name.to_string()),
+        None => true,
+    });
+
+    let serialized = match serde_json::to_string_pretty(&parsed) {
+        Ok(text) => format!("{text}\n"),
+        Err(_) => return Vec::new(),
+    };
+
+    match fs::write(config_path, serialized) {
+        Ok(()) => applied,
+        Err(error) => {
+            eprintln!(
+                "Warning: failed to write migrated global config to {}: {error}",
+                config_path.display()
+            );
+            Vec::new()
+        }
+    }
+}
+
+#[cfg(test)]
+mod workflow_rename_tests {
+    use super::*;
+
+    fn write_config_with_workflows(path: &Path, workflows: &[&str]) {
+        let body = serde_json::json!({
+            "featureFlags": {},
+            "profile": "custom",
+            "delivery": "both",
+            "workflows": workflows,
+        });
+        fs::write(
+            path,
+            format!("{}\n", serde_json::to_string_pretty(&body).unwrap()),
+        )
+        .unwrap();
+    }
+
+    fn read_workflow_names(path: &Path) -> Vec<String> {
+        let raw = fs::read_to_string(path).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&raw).unwrap();
+        parsed
+            .get("workflows")
+            .and_then(|value| value.as_array())
+            .map(|array| {
+                array
+                    .iter()
+                    .filter_map(|value| value.as_str().map(String::from))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    #[test]
+    fn renames_apply_to_implement() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("config.json");
+        write_config_with_workflows(&path, &["apply", "archive", "explore"]);
+
+        let applied = migrate_workflow_renames_at(&path);
+
+        assert_eq!(
+            applied,
+            vec![WorkflowRename {
+                old: "apply",
+                new: "implement"
+            }]
+        );
+        assert_eq!(
+            read_workflow_names(&path),
+            vec!["implement", "archive", "explore"]
+        );
+    }
+
+    #[test]
+    fn no_op_when_already_migrated() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("config.json");
+        let original = format!(
+            "{}\n",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "featureFlags": {},
+                "profile": "custom",
+                "workflows": ["implement", "archive"]
+            }))
+            .unwrap()
+        );
+        fs::write(&path, &original).unwrap();
+
+        let applied = migrate_workflow_renames_at(&path);
+
+        assert!(applied.is_empty());
+        let after = fs::read_to_string(&path).unwrap();
+        assert_eq!(
+            after, original,
+            "file should not be rewritten when no rename applies"
+        );
+    }
+
+    #[test]
+    fn dedupes_after_rename() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("config.json");
+        write_config_with_workflows(&path, &["apply", "implement", "archive"]);
+
+        let applied = migrate_workflow_renames_at(&path);
+
+        assert_eq!(
+            applied,
+            vec![WorkflowRename {
+                old: "apply",
+                new: "implement"
+            }]
+        );
+        assert_eq!(read_workflow_names(&path), vec!["implement", "archive"]);
+    }
+
+    #[test]
+    fn missing_file_is_silent_no_op() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("does-not-exist.json");
+
+        let applied = migrate_workflow_renames_at(&path);
+
+        assert!(applied.is_empty());
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn malformed_json_logs_and_does_not_overwrite() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("config.json");
+        fs::write(&path, "not valid json {").unwrap();
+
+        let applied = migrate_workflow_renames_at(&path);
+
+        assert!(applied.is_empty());
+        let after = fs::read_to_string(&path).unwrap();
+        assert_eq!(
+            after, "not valid json {",
+            "malformed config must be left untouched"
+        );
+    }
+
+    #[test]
+    fn missing_workflows_array_is_no_op() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("config.json");
+        let body = serde_json::json!({
+            "featureFlags": {},
+            "profile": "core"
+        });
+        let original = format!("{}\n", serde_json::to_string_pretty(&body).unwrap());
+        fs::write(&path, &original).unwrap();
+
+        let applied = migrate_workflow_renames_at(&path);
+
+        assert!(applied.is_empty());
+        let after = fs::read_to_string(&path).unwrap();
+        assert_eq!(after, original, "no-op configs must not be rewritten");
+    }
+}

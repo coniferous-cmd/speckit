@@ -84,6 +84,16 @@ impl UpdateCommand {
         // 4. Perform profile migration if needed
         migration::migrate_if_needed(&resolved_path, &detected_tool_refs)?;
 
+        // 4b. Rename legacy workflow IDs in the global config (e.g. apply →
+        // implement) so the active profile picks up the new name even when the
+        // user's `workflows` list still references the old ID.
+        for rename in migration::migrate_workflow_renames() {
+            println!(
+                "Migrated global config: workflow `{}` renamed to `{}`",
+                rename.old, rename.new
+            );
+        }
+
         // 5. Handle legacy cleanup
         self.handle_legacy_cleanup(&resolved_path)?;
 
