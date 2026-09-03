@@ -2,11 +2,12 @@
 //!
 //! Generates enriched instructions for creating artifacts or applying tasks.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
+use std::sync::{Mutex, OnceLock};
 
 use serde::{Deserialize, Serialize};
-use speckit_core::project_config::{ProjectConfig, load_operation_inputs};
+use speckit_core::project_config::{ProjectConfig, load_operation_inputs, validate_config_rules};
 
 use super::shared::{
     ArchiveInstructions, ImplementInstructions, ImplementProgress, TaskItem, print_json,
@@ -51,7 +52,9 @@ pub struct ArtifactInstructions {
     pub instruction: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub context: Option<String>,
-    pub rules: Vec<String>,
+    /// Artifact-specific rules from config (constraints for AI, not to be included in output).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rules: Option<Vec<String>>,
     pub template: String,
     pub dependencies: Vec<DependencyInfo>,
     pub unlocks: Vec<String>,
@@ -151,6 +154,9 @@ async fn build_artifact_instructions(
 
     // Load project context
     let project_config = read_project_config(project_root);
+    let core_project_config =
+        speckit_core::project_config::read_project_config(Path::new(project_root));
+    let core_artifact_id = core_instructions.artifact_id.clone();
     let context = project_config
         .as_ref()
         .and_then(|_| Some(format!("Project root: {project_root}")));
@@ -169,7 +175,7 @@ async fn build_artifact_instructions(
     };
 
     Ok(ArtifactInstructions {
-        artifact_id: core_instructions.artifact_id,
+        artifact_id: core_artifact_id.clone(),
         change_name: core_instructions.change_name,
         schema_name: core_instructions.schema_name,
         change_dir: core_instructions
@@ -192,7 +198,11 @@ async fn build_artifact_instructions(
             })
         },
         context,
-        rules: Vec::new(),
+        rules: extract_rules_for_artifact(
+            core_project_config.as_ref(),
+            &core_artifact_id,
+            project_root,
+        ),
         template: prepend_create_time(&core_instructions.template),
         dependencies,
         unlocks: core_instructions.unlocks,
@@ -200,6 +210,59 @@ async fn build_artifact_instructions(
         skipped: core_instructions.skipped.unwrap_or(false),
         warning: core_instructions.warning,
     })
+}
+
+/// Session-level cache for `validate_config_rules` warnings, so repeated calls
+/// within one invocation do not spam the user with the same unknown-artifact-id
+/// notice. Mirrors `shownWarnings` in the OpenSpec implementation.
+fn shown_rules_warnings() -> &'static Mutex<HashSet<String>> {
+    static CACHE: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(HashSet::new()))
+}
+
+/// Collect the artifact-specific rules from the project config, mirroring the
+/// OpenSpec `generateInstructions` filter: only rules whose key matches the
+/// requested artifact ID are returned. Any artifact ID listed under `rules:`
+/// that matches no artifact in any available schema triggers a session-deduped
+/// warning so a typo is visible without flooding output when many artifacts are
+/// queried in sequence.
+///
+/// Returns `None` when the config has no rules for this artifact or the
+/// resolved list is empty — `None` keeps the field out of the JSON output so
+/// consumers can treat absence and "no rules" identically.
+fn extract_rules_for_artifact(
+    project_config: Option<&ProjectConfig>,
+    artifact_id: &str,
+    project_root: &str,
+) -> Option<Vec<String>> {
+    let rules_map = project_config.and_then(|c| c.rules.as_ref())?;
+
+    // Validate artifact IDs once per session. The rules map is global while
+    // each change can use a different schema, so a key is "unknown" only when
+    // it matches no artifact in any available schema — matching the OpenSpec
+    // behavior at instruction-loader.ts:364-376.
+    let valid_artifact_ids: HashSet<String> = super::schemas::list_schemas_with_info(project_root)
+        .into_iter()
+        .flat_map(|schema| schema.artifacts.into_iter())
+        .collect();
+    let warnings = validate_config_rules(rules_map, &valid_artifact_ids);
+    if !warnings.is_empty() {
+        let mut cache = shown_rules_warnings()
+            .lock()
+            .expect("rules-warnings cache poisoned");
+        for warning in warnings {
+            if cache.insert(warning.clone()) {
+                eprintln!("{warning}");
+            }
+        }
+    }
+
+    let for_artifact = rules_map.get(artifact_id)?;
+    if for_artifact.is_empty() {
+        None
+    } else {
+        Some(for_artifact.clone())
+    }
 }
 
 /// Prepend a YAML frontmatter block with a single `create-time` key to a
@@ -284,16 +347,18 @@ fn print_instructions_text(instructions: &ArtifactInstructions) {
         }
     }
 
-    if !instructions.rules.is_empty() {
-        println!("<rules>");
-        println!(
-            "<!-- These are constraints for you to follow. Do NOT include this in your output. -->"
-        );
-        for rule in &instructions.rules {
-            println!("- {rule}");
+    if let Some(ref rules) = instructions.rules {
+        if !rules.is_empty() {
+            println!("<rules>");
+            println!(
+                "<!-- These are constraints for you to follow. Do NOT include this in your output. -->"
+            );
+            for rule in rules {
+                println!("- {rule}");
+            }
+            println!("</rules>");
+            println!();
         }
-        println!("</rules>");
-        println!();
     }
 
     if !instructions.dependencies.is_empty() {
@@ -713,9 +778,99 @@ fn print_archive_instructions_text(instructions: &ArchiveInstructions) {
 mod tests {
     use std::collections::HashMap;
 
-    use super::{generate_archive_instructions, prepend_create_time};
+    use super::{extract_rules_for_artifact, generate_archive_instructions, prepend_create_time};
     use chrono::Local;
     use speckit_core::project_config::{OperationConfig, ProjectConfig};
+
+    /// Build a minimal `ProjectConfig` with only the rules field populated, for
+    /// exercising `extract_rules_for_artifact` in isolation.
+    fn config_with_rules(rules: HashMap<String, Vec<String>>) -> ProjectConfig {
+        ProjectConfig {
+            schema: "spec-driven".to_string(),
+            context: None,
+            rules: Some(rules),
+            operations: None,
+            store: None,
+            github_copilot: None,
+            references: None,
+        }
+    }
+
+    #[test]
+    fn extract_rules_returns_matching_artifact_rules() {
+        let mut rules = HashMap::new();
+        rules.insert(
+            "proposal".to_string(),
+            vec!["Every section starts with Why".to_string()],
+        );
+        rules.insert("specs".to_string(), vec!["Include scenarios".to_string()]);
+
+        let config = config_with_rules(rules);
+
+        let result =
+            extract_rules_for_artifact(Some(&config), "proposal", "/nonexistent-speckit-root");
+
+        assert_eq!(
+            result,
+            Some(vec!["Every section starts with Why".to_string()])
+        );
+    }
+
+    #[test]
+    fn extract_rules_returns_none_when_artifact_id_not_listed() {
+        let mut rules = HashMap::new();
+        rules.insert(
+            "proposal".to_string(),
+            vec!["Every section starts with Why".to_string()],
+        );
+
+        let config = config_with_rules(rules);
+
+        let result =
+            extract_rules_for_artifact(Some(&config), "design", "/nonexistent-speckit-root");
+
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn extract_rules_returns_none_without_project_config() {
+        let result = extract_rules_for_artifact(None, "proposal", "/nonexistent-speckit-root");
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn extract_rules_returns_none_when_config_has_no_rules_block() {
+        let config = ProjectConfig {
+            schema: "spec-driven".to_string(),
+            context: None,
+            rules: None,
+            operations: None,
+            store: None,
+            github_copilot: None,
+            references: None,
+        };
+
+        let result =
+            extract_rules_for_artifact(Some(&config), "proposal", "/nonexistent-speckit-root");
+
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn extract_rules_returns_none_when_matching_key_has_empty_vec() {
+        let mut rules = HashMap::new();
+        rules.insert("proposal".to_string(), Vec::new());
+
+        let config = config_with_rules(rules);
+
+        let result =
+            extract_rules_for_artifact(Some(&config), "proposal", "/nonexistent-speckit-root");
+
+        assert!(
+            result.is_none(),
+            "empty rules vec must collapse to None so the JSON field is omitted"
+        );
+    }
 
     #[test]
     fn archive_instructions_omit_optional_inputs_without_config() {
