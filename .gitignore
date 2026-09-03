@@ -3,6 +3,8 @@
 **/*.rs.bk
 Cargo.lock
 
+.agents
+.claude
 speckit/
 
 # IDE / Editor
