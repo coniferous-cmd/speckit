@@ -6,7 +6,9 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
+use speckit_core::parsers::ChangeParser;
 use speckit_core::root_selection::{ResolveSpeckitRootOptions, resolve_speckit_root};
+use speckit_core::schemas::Delta;
 use speckit_core::validation::{ValidationLevel, Validator};
 
 /// Options for the change show command.
@@ -142,7 +144,7 @@ pub async fn change_show(
     if options.json {
         let content = tokio::fs::read_to_string(&proposal_path).await?;
         let title = extract_title(&content, &name);
-        let deltas = extract_deltas(&content);
+        let deltas = parse_change_deltas(&content, &change_dir, &name).await?;
 
         if options.requirements_only {
             eprintln!("Flag --requirements-only is deprecated; use --deltas-only instead.");
@@ -180,8 +182,11 @@ pub async fn change_list(options: ChangeListOptions, store: Option<&str>) -> any
                 match tokio::fs::read_to_string(&proposal_path).await {
                     Ok(content) => {
                         let title = extract_title(&content, name);
-                        let deltas = extract_deltas(&content);
-                        (title, deltas.len())
+                        let delta_count = parse_change_deltas(&content, &change_dir, name)
+                            .await
+                            .map(|deltas| deltas.len())
+                            .unwrap_or(0);
+                        (title, delta_count)
                     }
                     Err(_) => ("Unknown".to_string(), 0),
                 }
@@ -235,8 +240,11 @@ pub async fn change_list(options: ChangeListOptions, store: Option<&str>) -> any
         match tokio::fs::read_to_string(&proposal_path).await {
             Ok(content) => {
                 let title = extract_title(&content, name);
-                let deltas = extract_deltas(&content);
-                println!("{name}: {title} [deltas {}]{task_text}", deltas.len());
+                let delta_count = parse_change_deltas(&content, &change_dir, name)
+                    .await
+                    .map(|deltas| deltas.len())
+                    .unwrap_or(0);
+                println!("{name}: {title} [deltas {delta_count}]{task_text}");
             }
             Err(_) => {
                 println!("{name}: (unable to read){task_text}");
@@ -411,23 +419,19 @@ fn extract_title(content: &str, fallback: &str) -> String {
     fallback.to_string()
 }
 
-/// Extract deltas (## headers with ADDED/MODIFIED/REMOVED) from content.
-fn extract_deltas(content: &str) -> Vec<String> {
-    let mut deltas = Vec::new();
-    for line in content.lines() {
-        let trimmed = line.trim();
-        if trimmed.starts_with("## ") {
-            let header = trimmed[3..].trim().to_string();
-            if header.contains("ADDED")
-                || header.contains("MODIFIED")
-                || header.contains("REMOVED")
-                || header.contains("RENAMED")
-            {
-                deltas.push(header);
-            }
-        }
-    }
-    deltas
+/// Parse a change's semantic deltas, including delta spec files below `specs/`.
+///
+/// This is deliberately shared by `show` and `list`: both views must report
+/// the same count that validation and JSON conversion derive from delta specs.
+async fn parse_change_deltas(
+    content: &str,
+    change_dir: &Path,
+    change_name: &str,
+) -> anyhow::Result<Vec<Delta>> {
+    Ok(ChangeParser::new(content, change_dir)
+        .parse_change_with_deltas(change_name)
+        .await?
+        .deltas)
 }
 
 /// Get task progress for a change.
@@ -501,4 +505,50 @@ pub async fn resolve_project_root(store: Option<&str>) -> anyhow::Result<String>
     })
     .map_err(|e| anyhow::anyhow!("{}", e.diagnostic.message))?;
     Ok(resolved.path.to_string_lossy().into_owned())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use speckit_core::schemas::DeltaOperation;
+
+    const PROPOSAL: &str = "# Change: Channel management\n\n## Why\nChannels need lifecycle management.\n\n## What Changes\n- Add channel management.\n";
+
+    #[tokio::test]
+    async fn show_and_list_delta_parser_reads_nested_delta_specs() {
+        let temp = tempfile::tempdir().unwrap();
+        let specs_dir = temp.path().join("specs").join("channel-management");
+        std::fs::create_dir_all(&specs_dir).unwrap();
+        std::fs::write(
+            specs_dir.join("spec.md"),
+            "## ADDED Requirements\n\n### Requirement: Manage channels\nThe system SHALL manage channels.\n\n#### Scenario: Create a channel\n- **WHEN** an administrator creates a channel\n- **THEN** the channel is available\n",
+        )
+        .unwrap();
+
+        let deltas = parse_change_deltas(PROPOSAL, temp.path(), "channel-management")
+            .await
+            .unwrap();
+
+        assert_eq!(deltas.len(), 1);
+        assert_eq!(deltas[0].spec, "channel-management");
+        assert_eq!(deltas[0].operation, DeltaOperation::Added);
+    }
+
+    #[tokio::test]
+    async fn delta_section_without_a_requirement_does_not_count_as_a_delta() {
+        let temp = tempfile::tempdir().unwrap();
+        let specs_dir = temp.path().join("specs").join("channel-management");
+        std::fs::create_dir_all(&specs_dir).unwrap();
+        std::fs::write(
+            specs_dir.join("spec.md"),
+            "## ADDED Requirements\n\nThis heading has no requirement block.\n",
+        )
+        .unwrap();
+
+        let deltas = parse_change_deltas(PROPOSAL, temp.path(), "channel-management")
+            .await
+            .unwrap();
+
+        assert!(deltas.is_empty());
+    }
 }

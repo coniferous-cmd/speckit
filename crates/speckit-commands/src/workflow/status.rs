@@ -3,9 +3,13 @@
 //! Displays artifact completion status for a change.
 
 use serde::{Deserialize, Serialize};
+use std::path::Path;
 
 use super::shared::{
     ArtifactStatus, DEFAULT_SCHEMA, get_available_changes, print_json, validate_change_exists,
+};
+use speckit_core::artifact_graph::{
+    LoadChangeContextOptions, format_change_status, load_change_context,
 };
 use speckit_core::change_metadata::read_skip_specs_marker;
 
@@ -88,40 +92,88 @@ pub async fn status_command(options: StatusOptions) -> anyhow::Result<()> {
         .clone()
         .unwrap_or_else(|| DEFAULT_SCHEMA.to_string());
 
-    // Validate schema exists
+    // Validate schema exists, then resolve the schema definition for the
+    // `implement_requires` field on the status output.
     super::shared::validate_schema_exists(&schema_name, &project_root)?;
     let schema_definition = speckit_core::artifact_graph::resolve_schema(
         &schema_name,
         Some(std::path::Path::new(&project_root)),
     )?;
 
-    // Build a minimal status from what we can determine from the filesystem
+    // Build the change directory used as a fallback context root for the
+    // artifact graph loader.
     let change_dir = std::path::Path::new(&project_root)
         .join("speckit")
         .join("changes")
         .join(&change_name);
 
-    let artifacts = detect_artifact_status(&change_dir).await;
-    let done_count = artifacts.iter().filter(|a| a.status == "done").count();
-    let skipped_count = artifacts.iter().filter(|a| a.status == "skipped").count();
-    let is_planning_complete =
-        !artifacts.is_empty() && done_count + skipped_count == artifacts.len();
+    // Use the artifact graph rather than a fixed four-file probe. This preserves
+    // custom-schema artifacts, concrete glob matches, dependency state, and
+    // skip_specs semantics in the agent-facing JSON contract.
+    let context = load_change_context(
+        Path::new(&project_root),
+        &change_name,
+        options.schema.as_deref(),
+        LoadChangeContextOptions {
+            change_dir: Some(change_dir.clone()),
+        },
+    )
+    .map_err(|error| anyhow::anyhow!("Unable to load change status: {error}"))?;
+    let status = format_change_status(&context);
 
     let output = ChangeStatusOutput {
-        change_name: change_name.clone(),
-        schema_name,
-        change_root: None,
-        artifacts,
-        is_planning_complete,
+        change_name: status.change_name,
+        schema_name: status.schema_name,
+        change_root: Some(status.change_root.to_string_lossy().replace('\\', "/")),
+        artifacts: status
+            .artifacts
+            .into_iter()
+            .map(|artifact| ArtifactStatusEntry {
+                id: artifact.id,
+                status: serde_json::to_value(artifact.status)
+                    .expect("artifact status is serializable")
+                    .as_str()
+                    .unwrap_or("blocked")
+                    .to_string(),
+                missing_deps: artifact.missing_deps,
+            })
+            .collect(),
+        is_planning_complete: status.is_planning_complete,
         implement_requires: schema_definition
             .implement
             .map(|phase| phase.requires)
             .unwrap_or_default(),
-        root: None,
+        root: Some(serde_json::json!({
+            "path": project_root.replace('\\', "/"),
+            "source": if options.store.is_some() { "store" } else { "nearest" },
+            "storeId": options.store,
+        })),
     };
 
     if options.json {
-        print_json(&output);
+        let mut payload = serde_json::to_value(&output)?;
+        let object = payload.as_object_mut().expect("status output is an object");
+        object.insert(
+            "planningHome".to_string(),
+            serde_json::json!({
+                "kind": "repo",
+                "root": project_root.replace('\\', "/"),
+                "changesDir": Path::new(&project_root).join("speckit").join("changes").to_string_lossy().replace('\\', "/"),
+                "defaultSchema": output.schema_name.clone(),
+            }),
+        );
+        object.insert(
+            "artifactPaths".to_string(),
+            serde_json::to_value(status.artifact_paths)?,
+        );
+        object.insert(
+            "actionContext".to_string(),
+            serde_json::json!({
+                "projectRoot": project_root.replace('\\', "/"),
+                "artifactIds": output.artifacts.iter().map(|artifact| artifact.id.clone()).collect::<Vec<_>>(),
+            }),
+        );
+        print_json(&payload);
         return Ok(());
     }
 
@@ -130,6 +182,7 @@ pub async fn status_command(options: StatusOptions) -> anyhow::Result<()> {
 }
 
 /// Detect artifact status from the filesystem.
+#[allow(dead_code)]
 async fn detect_artifact_status(change_dir: &std::path::Path) -> Vec<ArtifactStatusEntry> {
     let mut artifacts = Vec::new();
 
@@ -248,6 +301,7 @@ fn print_status_text(status: &ChangeStatusOutput) {
 }
 
 /// Returns whether `dir` contains at least one Markdown file at any depth.
+#[allow(dead_code)]
 fn has_markdown_file_recursively(dir: &std::path::Path) -> bool {
     let entries = match std::fs::read_dir(dir) {
         Ok(entries) => entries,

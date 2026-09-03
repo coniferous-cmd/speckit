@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
+use speckit_core::project_config::{ProjectConfig, load_operation_inputs};
 
 use super::shared::{
     ArchiveInstructions, DEFAULT_SCHEMA, ImplementInstructions, ImplementProgress, TaskItem,
@@ -693,7 +694,9 @@ pub async fn archive_instructions_command(
     )
     .await?;
 
-    let instructions = generate_archive_instructions(&change_name);
+    let project_config =
+        speckit_core::project_config::read_project_config(Path::new(&project_root));
+    let instructions = generate_archive_instructions(&change_name, project_config.as_ref());
 
     if options.json {
         print_json(&instructions);
@@ -704,12 +707,17 @@ pub async fn archive_instructions_command(
     Ok(())
 }
 
-/// Generate archive instructions.
-pub fn generate_archive_instructions(change_name: &str) -> ArchiveInstructions {
+/// Generate archive instructions, including configured project context and
+/// archive-specific advisory guidance when present.
+pub fn generate_archive_instructions(
+    change_name: &str,
+    project_config: Option<&ProjectConfig>,
+) -> ArchiveInstructions {
+    let operation_inputs = load_operation_inputs(project_config, "archive");
     ArchiveInstructions {
         change_name: change_name.to_string(),
-        context: None,
-        operation_guidance: None,
+        context: operation_inputs.context,
+        operation_guidance: operation_inputs.operation_guidance,
     }
 }
 
@@ -741,8 +749,51 @@ fn print_archive_instructions_text(instructions: &ArchiveInstructions) {
 
 #[cfg(test)]
 mod tests {
-    use super::prepend_create_time;
+    use std::collections::HashMap;
+
+    use super::{generate_archive_instructions, prepend_create_time};
     use chrono::Local;
+    use speckit_core::project_config::{OperationConfig, ProjectConfig};
+
+    #[test]
+    fn archive_instructions_omit_optional_inputs_without_config() {
+        let instructions = generate_archive_instructions("release-notes", None);
+
+        assert_eq!(instructions.change_name, "release-notes");
+        assert!(instructions.context.is_none());
+        assert!(instructions.operation_guidance.is_none());
+    }
+
+    #[test]
+    fn archive_instructions_load_project_context_and_archive_guidance() {
+        let mut operations = HashMap::new();
+        operations.insert(
+            "archive".to_string(),
+            OperationConfig {
+                guidance: Some(vec!["Confirm release notes are published.".to_string()]),
+            },
+        );
+        let config = ProjectConfig {
+            schema: "spec-driven".to_string(),
+            context: Some("Production changes require a rollout record.".to_string()),
+            rules: None,
+            operations: Some(operations),
+            store: None,
+            github_copilot: None,
+            references: None,
+        };
+
+        let instructions = generate_archive_instructions("release-notes", Some(&config));
+
+        assert_eq!(
+            instructions.context.as_deref(),
+            Some("Production changes require a rollout record.")
+        );
+        assert_eq!(
+            instructions.operation_guidance,
+            Some(vec!["Confirm release notes are published.".to_string()])
+        );
+    }
 
     #[test]
     fn prepend_create_time_starts_with_frontmatter() {
