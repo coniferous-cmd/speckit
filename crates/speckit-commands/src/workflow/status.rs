@@ -5,9 +5,7 @@
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
-use super::shared::{
-    ArtifactStatus, DEFAULT_SCHEMA, get_available_changes, print_json, validate_change_exists,
-};
+use super::shared::{ArtifactStatus, get_available_changes, print_json, validate_change_exists};
 use speckit_core::artifact_graph::{
     LoadChangeContextOptions, format_change_status, load_change_context,
 };
@@ -87,19 +85,6 @@ pub async fn status_command(options: StatusOptions) -> anyhow::Result<()> {
     )
     .await?;
 
-    let schema_name = options
-        .schema
-        .clone()
-        .unwrap_or_else(|| DEFAULT_SCHEMA.to_string());
-
-    // Validate schema exists, then resolve the schema definition for the
-    // `implement_requires` field on the status output.
-    super::shared::validate_schema_exists(&schema_name, &project_root)?;
-    let schema_definition = speckit_core::artifact_graph::resolve_schema(
-        &schema_name,
-        Some(std::path::Path::new(&project_root)),
-    )?;
-
     // Build the change directory used as a fallback context root for the
     // artifact graph loader.
     let change_dir = std::path::Path::new(&project_root)
@@ -139,10 +124,7 @@ pub async fn status_command(options: StatusOptions) -> anyhow::Result<()> {
             })
             .collect(),
         is_planning_complete: status.is_planning_complete,
-        implement_requires: schema_definition
-            .implement
-            .map(|phase| phase.requires)
-            .unwrap_or_default(),
+        implement_requires: status.implement_requires,
         root: Some(serde_json::json!({
             "path": project_root.replace('\\', "/"),
             "source": if options.store.is_some() { "store" } else { "nearest" },

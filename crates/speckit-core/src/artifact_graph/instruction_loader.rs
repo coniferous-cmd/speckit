@@ -8,6 +8,7 @@ use super::outputs::{resolve_artifact_output_path, resolve_artifact_outputs};
 use super::resolver::{get_schema_dir, resolve_schema};
 use super::state::detect_completed;
 use super::types::{Artifact, CompletedSet};
+use crate::{change_metadata, project_config};
 
 /// Error thrown when loading a template file fails.
 #[derive(Debug, Error)]
@@ -197,7 +198,8 @@ pub fn load_template(
 /// Schema resolution order:
 /// 1. Explicit `schema_name` parameter (if provided)
 /// 2. Schema from metadata (if exists in change directory)
-/// 3. Default "spec-driven"
+/// 3. Schema from project config (if present)
+/// 4. Default "spec-driven"
 pub fn load_change_context(
     project_root: &Path,
     change_name: &str,
@@ -211,10 +213,15 @@ pub fn load_change_context(
             .join(change_name)
     });
 
-    // Schema resolution: explicit > metadata > default
-    let resolved_schema_name = schema_name
-        .map(|s| s.to_string())
-        .unwrap_or_else(|| "spec-driven".to_string());
+    let resolved_schema_name = match schema_name {
+        Some(schema_name) => schema_name.to_string(),
+        None => change_metadata::read_change_metadata(&change_dir, project_root)?
+            .and_then(|metadata| metadata.schema)
+            .or_else(|| {
+                project_config::read_project_config(project_root).map(|config| config.schema)
+            })
+            .unwrap_or_else(|| "spec-driven".to_string()),
+    };
 
     let schema = resolve_schema(&resolved_schema_name, Some(project_root))?;
     let graph = ArtifactGraph::from_schema(schema);
@@ -287,9 +294,17 @@ pub fn generate_instructions(
     artifact_id: &str,
 ) -> Result<ArtifactInstructions, Box<dyn std::error::Error>> {
     let artifact = context.graph.get_artifact(artifact_id).ok_or_else(|| {
+        let valid: Vec<&str> = context
+            .graph
+            .get_all_artifacts()
+            .iter()
+            .map(|artifact| artifact.id.as_str())
+            .collect();
         format!(
-            "Artifact '{}' not found in schema '{}'",
-            artifact_id, context.schema_name
+            "Artifact '{}' not found in schema '{}'. Valid artifacts: {}",
+            artifact_id,
+            context.schema_name,
+            valid.join(", ")
         )
     })?;
 
@@ -387,11 +402,12 @@ fn get_unlocked_artifacts(graph: &ArtifactGraph, artifact_id: &str) -> Vec<Strin
 
 /// Formats the status of all artifacts in a change.
 pub fn format_change_status(context: &ChangeContext) -> ChangeStatus {
-    let schema = resolve_schema(&context.schema_name, Some(&context.project_root));
-    let implement_requires = schema
+    let implement_requires = context
+        .graph
+        .schema()
+        .implement
         .as_ref()
-        .ok()
-        .and_then(|s| s.implement.as_ref().map(|a| a.requires.clone()))
+        .map(|phase| phase.requires.clone())
         .unwrap_or_else(|| {
             context
                 .graph
@@ -476,6 +492,7 @@ pub fn format_change_status(context: &ChangeContext) -> ChangeStatus {
 mod tests {
     use super::*;
     use crate::artifact_graph::schema::parse_schema;
+    use std::fs;
 
     fn make_context(tmp: &Path) -> ChangeContext {
         let yaml = r#"
@@ -506,6 +523,152 @@ artifacts:
             project_root: tmp.to_path_buf(),
             skipped_artifacts: None,
         }
+    }
+
+    fn write_schema(project_root: &Path, name: &str, tracking_file: Option<&str>) {
+        let schema_dir = project_root.join("speckit").join("schemas").join(name);
+        fs::create_dir_all(&schema_dir).unwrap();
+        let implement = tracking_file
+            .map(|tracking| {
+                format!(
+                    "implement:\n  requires:\n    - plan\n  tracks: {tracking}\n  instruction: Use the custom implement workflow.\n"
+                )
+            })
+            .unwrap_or_default();
+        fs::write(
+            schema_dir.join("schema.yaml"),
+            format!(
+                "name: {name}\nversion: 1\nartifacts:\n  - id: plan\n    generates: plan.md\n    description: Plan\n    template: plan.md\n{implement}"
+            ),
+        )
+        .unwrap();
+    }
+
+    fn write_change(project_root: &Path, metadata: Option<&str>) -> std::path::PathBuf {
+        let change_dir = project_root.join("speckit/changes/example");
+        fs::create_dir_all(&change_dir).unwrap();
+        if let Some(metadata) = metadata {
+            fs::write(
+                change_dir.join(crate::change_metadata::METADATA_FILENAME),
+                metadata,
+            )
+            .unwrap();
+        }
+        change_dir
+    }
+
+    #[test]
+    fn load_change_context_resolves_schema_from_change_metadata() {
+        let project = tempfile::tempdir().unwrap();
+        write_schema(project.path(), "custom", Some("progress.md"));
+        let change_dir = write_change(project.path(), Some("schema: custom\n"));
+
+        let context = load_change_context(
+            project.path(),
+            "example",
+            None,
+            LoadChangeContextOptions {
+                change_dir: Some(change_dir),
+            },
+        )
+        .unwrap();
+
+        assert_eq!(context.schema_name, "custom");
+        assert_eq!(
+            context
+                .graph
+                .schema()
+                .implement
+                .as_ref()
+                .unwrap()
+                .tracks
+                .as_deref(),
+            Some("progress.md")
+        );
+    }
+
+    #[test]
+    fn load_change_context_resolves_schema_from_project_config() {
+        let project = tempfile::tempdir().unwrap();
+        write_schema(project.path(), "project", None);
+        fs::create_dir_all(project.path().join("speckit")).unwrap();
+        fs::write(
+            project.path().join("speckit/config.yaml"),
+            "schema: project\n",
+        )
+        .unwrap();
+        let change_dir = write_change(project.path(), None);
+
+        let context = load_change_context(
+            project.path(),
+            "example",
+            None,
+            LoadChangeContextOptions {
+                change_dir: Some(change_dir),
+            },
+        )
+        .unwrap();
+
+        assert_eq!(context.schema_name, "project");
+    }
+
+    #[test]
+    fn load_change_context_uses_spec_driven_by_default() {
+        let project = tempfile::tempdir().unwrap();
+        write_schema(project.path(), "spec-driven", None);
+        let change_dir = write_change(project.path(), None);
+
+        let context = load_change_context(
+            project.path(),
+            "example",
+            None,
+            LoadChangeContextOptions {
+                change_dir: Some(change_dir),
+            },
+        )
+        .unwrap();
+
+        assert_eq!(context.schema_name, "spec-driven");
+    }
+
+    #[test]
+    fn load_change_context_explicit_schema_overrides_metadata() {
+        let project = tempfile::tempdir().unwrap();
+        write_schema(project.path(), "custom", Some("progress.md"));
+        write_schema(project.path(), "spec-driven", None);
+        let change_dir = write_change(project.path(), Some("schema: custom\n"));
+
+        let context = load_change_context(
+            project.path(),
+            "example",
+            Some("spec-driven"),
+            LoadChangeContextOptions {
+                change_dir: Some(change_dir),
+            },
+        )
+        .unwrap();
+
+        assert_eq!(context.schema_name, "spec-driven");
+    }
+
+    #[test]
+    fn load_change_context_propagates_metadata_schema_typo() {
+        let project = tempfile::tempdir().unwrap();
+        write_schema(project.path(), "spec-driven", None);
+        let change_dir = write_change(project.path(), Some("schema: spec-drivn\n"));
+
+        let error = load_change_context(
+            project.path(),
+            "example",
+            None,
+            LoadChangeContextOptions {
+                change_dir: Some(change_dir),
+            },
+        )
+        .unwrap_err()
+        .to_string();
+
+        assert!(error.contains("Did you mean: spec-driven"), "{error}");
     }
 
     #[test]

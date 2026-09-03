@@ -105,20 +105,11 @@ pub fn read_retire_capabilities_marker(change_dir: &Path) -> Result<bool> {
     Ok(metadata.retire_capabilities)
 }
 
-/// Resolve the schema for a change from its metadata.
-pub fn resolve_schema_for_change(change_dir: &Path) -> Result<Option<String>> {
-    let metadata_path = change_dir.join(METADATA_FILENAME);
-    if !metadata_path.exists() {
-        return Ok(None);
-    }
-
-    let content = std::fs::read_to_string(&metadata_path)?;
-    let metadata: ChangeMetadata = serde_yaml::from_str(&content)?;
-    Ok(metadata.schema)
-}
-
-/// Read change metadata from a directory.
-pub fn read_change_metadata(change_dir: &Path) -> Result<Option<ChangeMetadata>> {
+/// Read change metadata and validate its declared schema against the project.
+pub fn read_change_metadata(
+    change_dir: &Path,
+    project_root: &Path,
+) -> Result<Option<ChangeMetadata>> {
     let metadata_path = change_dir.join(METADATA_FILENAME);
     if !metadata_path.exists() {
         return Ok(None);
@@ -128,6 +119,36 @@ pub fn read_change_metadata(change_dir: &Path) -> Result<Option<ChangeMetadata>>
         .with_context(|| format!("Failed to read {}", metadata_path.display()))?;
     let metadata: ChangeMetadata = serde_yaml::from_str(&content)
         .with_context(|| format!("Failed to parse {}", metadata_path.display()))?;
+
+    if let Some(schema_name) = metadata.schema.as_deref() {
+        if let Err(error) = crate::artifact_graph::resolve_schema(schema_name, Some(project_root)) {
+            let mut message = format!(
+                "Schema '{schema_name}' declared in {} could not be resolved: {error}",
+                metadata_path.display()
+            );
+
+            let available = crate::artifact_graph::list_schemas_with_info(Some(project_root))
+                .into_iter()
+                .map(|schema| {
+                    (
+                        schema.name,
+                        matches!(schema.source, crate::artifact_graph::SchemaSource::Package),
+                    )
+                })
+                .collect::<Vec<_>>();
+            let suggestion = crate::project_config::suggest_schemas(schema_name, &available);
+            if let Some(candidate) = suggestion.lines().find_map(|line| {
+                line.trim()
+                    .strip_prefix("- ")
+                    .and_then(|value| value.split_whitespace().next())
+            }) {
+                message.push_str(&format!("\nDid you mean: {candidate}"));
+            }
+
+            anyhow::bail!(message);
+        }
+    }
+
     Ok(Some(metadata))
 }
 
@@ -136,6 +157,18 @@ mod tests {
     use super::*;
     use std::fs;
     use tempfile::tempdir;
+
+    fn write_schema(project_root: &Path, name: &str) {
+        let schema_dir = project_root.join("speckit").join("schemas").join(name);
+        fs::create_dir_all(&schema_dir).unwrap();
+        fs::write(
+            schema_dir.join("schema.yaml"),
+            format!(
+                "name: {name}\nversion: 1\nartifacts:\n  - id: plan\n    generates: plan.md\n    description: Plan\n    template: plan.md\n"
+            ),
+        )
+        .unwrap();
+    }
 
     // P0-6: Five retire_capabilities test cases (new, modified, removed, retired, conflict)
 
@@ -221,5 +254,65 @@ mod tests {
         .unwrap();
         let result = read_retire_capabilities_marker(dir.path());
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn read_change_metadata_returns_none_when_missing() {
+        let dir = tempdir().unwrap();
+        assert!(
+            read_change_metadata(dir.path(), dir.path())
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn read_change_metadata_accepts_a_resolvable_schema() {
+        let project = tempdir().unwrap();
+        write_schema(project.path(), "custom");
+        let change_dir = project.path().join("speckit/changes/example");
+        fs::create_dir_all(&change_dir).unwrap();
+        fs::write(
+            change_dir.join(METADATA_FILENAME),
+            "schema: custom\nskip_specs: false\n",
+        )
+        .unwrap();
+
+        let metadata = read_change_metadata(&change_dir, project.path())
+            .unwrap()
+            .unwrap();
+        assert_eq!(metadata.schema.as_deref(), Some("custom"));
+    }
+
+    #[test]
+    fn read_change_metadata_rejects_unknown_schema_with_suggestion() {
+        let project = tempdir().unwrap();
+        write_schema(project.path(), "spec-driven");
+        let change_dir = project.path().join("speckit/changes/example");
+        fs::create_dir_all(&change_dir).unwrap();
+        fs::write(change_dir.join(METADATA_FILENAME), "schema: spec-drivn\n").unwrap();
+
+        let error = read_change_metadata(&change_dir, project.path())
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("spec-drivn"));
+        assert!(error.contains("Did you mean: spec-driven"), "{error}");
+    }
+
+    #[test]
+    fn read_change_metadata_rejects_nonexistent_schema_by_name() {
+        let project = tempdir().unwrap();
+        let change_dir = project.path().join("speckit/changes/example");
+        fs::create_dir_all(&change_dir).unwrap();
+        fs::write(
+            change_dir.join(METADATA_FILENAME),
+            "schema: definitely-not-installed\n",
+        )
+        .unwrap();
+
+        let error = read_change_metadata(&change_dir, project.path())
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("definitely-not-installed"), "{error}");
     }
 }

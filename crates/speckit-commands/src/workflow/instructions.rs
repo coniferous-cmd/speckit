@@ -9,11 +9,15 @@ use serde::{Deserialize, Serialize};
 use speckit_core::project_config::{ProjectConfig, load_operation_inputs};
 
 use super::shared::{
-    ArchiveInstructions, DEFAULT_SCHEMA, ImplementInstructions, ImplementProgress, TaskItem,
-    print_json, validate_change_exists, validate_schema_exists,
+    ArchiveInstructions, ImplementInstructions, ImplementProgress, TaskItem, print_json,
+    validate_change_exists,
 };
 use crate::shared_gather::{
     ReferenceIndexEntry, assemble_reference_index, read_project_config, read_registry_snapshot,
+};
+use speckit_core::artifact_graph::{
+    ChangeContext, LoadChangeContextOptions, generate_instructions as generate_core_instructions,
+    load_change_context, resolve_artifact_outputs,
 };
 
 // -----------------------------------------------------------------------------
@@ -89,18 +93,10 @@ pub async fn instructions_command(
     )
     .await?;
 
-    let schema_name = options
-        .schema
-        .clone()
-        .unwrap_or_else(|| DEFAULT_SCHEMA.to_string());
-    validate_schema_exists(&schema_name, &project_root)?;
-
     let id = match artifact_id {
         Some(id) => id.to_string(),
         None => {
-            anyhow::bail!(
-                "Missing required argument <artifact>. Valid artifacts:\n  proposal\n  specs\n  design\n  tasks"
-            );
+            anyhow::bail!("Missing required argument <artifact>");
         }
     };
 
@@ -109,15 +105,17 @@ pub async fn instructions_command(
         .join("changes")
         .join(&change_name);
 
-    // Build instructions based on the artifact id
-    let instructions = build_artifact_instructions(
-        &id,
+    let context = load_change_context(
+        Path::new(&project_root),
         &change_name,
-        &schema_name,
-        &change_dir.to_string_lossy(),
-        &project_root,
+        options.schema.as_deref(),
+        LoadChangeContextOptions {
+            change_dir: Some(change_dir),
+        },
     )
-    .await?;
+    .map_err(|error| anyhow::anyhow!("Unable to load change instructions: {error}"))?;
+
+    let instructions = build_artifact_instructions(&id, &context, &project_root).await?;
 
     if options.json {
         print_json(&instructions);
@@ -131,88 +129,25 @@ pub async fn instructions_command(
 /// Build artifact instructions from the filesystem state.
 async fn build_artifact_instructions(
     artifact_id: &str,
-    change_name: &str,
-    schema_name: &str,
-    change_dir: &str,
+    context: &ChangeContext,
     project_root: &str,
 ) -> anyhow::Result<ArtifactInstructions> {
-    let change_path = Path::new(change_dir);
-
-    let (description, output_path, template, rules, dependencies, unlocks) = match artifact_id {
-        "proposal" => (
-            "High-level description of the change, its motivation, and scope.",
-            "proposal.md",
-            include_str!("../../templates/proposal.md"),
-            vec![
-                "Include a clear 'Why' section explaining motivation".to_string(),
-                "List new and modified capabilities".to_string(),
-            ],
-            vec![],
-            vec![
-                "specs".to_string(),
-                "design".to_string(),
-                "tasks".to_string(),
-            ],
-        ),
-        "specs" => (
-            "Detailed specifications with requirements and scenarios.",
-            "specs/**/*.md",
-            include_str!("../../templates/specs.md"),
-            vec![
-                "Use ## ADDED/MODIFIED/REMOVED Requirements headers".to_string(),
-                "Each requirement MUST include at least one #### Scenario: block".to_string(),
-            ],
-            vec![DependencyInfo {
-                id: "proposal".to_string(),
-                path: "proposal.md".to_string(),
-                description: "The proposal defining what this change is about".to_string(),
-                done: change_path.join("proposal.md").exists(),
-                skipped: false,
-            }],
-            vec!["design".to_string(), "tasks".to_string()],
-        ),
-        "design" => (
-            "Technical design decisions and implementation approach.",
-            "design.md",
-            include_str!("../../templates/design.md"),
-            vec![
-                "Document goals and non-goals".to_string(),
-                "Record key decisions and alternatives considered".to_string(),
-            ],
-            vec![DependencyInfo {
-                id: "specs".to_string(),
-                path: "specs/".to_string(),
-                description: "The detailed specifications".to_string(),
-                done: change_path.join("specs").is_dir(),
-                skipped: false,
-            }],
-            vec!["tasks".to_string()],
-        ),
-        "tasks" => (
-            "Implementation checklist with trackable tasks.",
-            "tasks.md",
-            include_str!("../../templates/tasks.md"),
-            vec![
-                "Use - [ ] and - [x] checkbox syntax".to_string(),
-                "Each task should be specific and actionable".to_string(),
-            ],
-            vec![DependencyInfo {
-                id: "design".to_string(),
-                path: "design.md".to_string(),
-                description: "The technical design to implement".to_string(),
-                done: change_path.join("design.md").exists(),
-                skipped: false,
-            }],
-            vec![],
-        ),
-        _ => {
-            anyhow::bail!(
-                "Artifact '{artifact_id}' not found in schema '{schema_name}'. Valid artifacts:\n  proposal\n  specs\n  design\n  tasks"
-            );
-        }
-    };
-
-    let resolved_output = change_path.join(output_path.trim_end_matches("/**/*"));
+    let core_instructions = generate_core_instructions(context, artifact_id)
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
+    let fallback_artifact_id = core_instructions.artifact_id.clone();
+    let fallback_change_name = core_instructions.change_name.clone();
+    let dependencies = core_instructions
+        .dependencies
+        .into_iter()
+        .map(|dependency| DependencyInfo {
+            id: dependency.id,
+            path: dependency.path,
+            description: dependency.description,
+            done: dependency.done,
+            skipped: dependency.skipped.unwrap_or(false),
+        })
+        .collect::<Vec<_>>();
+    let is_blocked = dependencies.iter().any(|dependency| !dependency.done);
 
     // Load project context
     let project_config = read_project_config(project_root);
@@ -233,28 +168,37 @@ async fn build_artifact_instructions(
         if idx.is_empty() { None } else { Some(idx) }
     };
 
-    let is_blocked = dependencies.iter().any(|d| !d.done);
-
     Ok(ArtifactInstructions {
-        artifact_id: artifact_id.to_string(),
-        change_name: change_name.to_string(),
-        schema_name: schema_name.to_string(),
-        change_dir: change_dir.replace('\\', "/"),
-        resolved_output_path: resolved_output.to_string_lossy().replace('\\', "/"),
-        description: description.to_string(),
+        artifact_id: core_instructions.artifact_id,
+        change_name: core_instructions.change_name,
+        schema_name: core_instructions.schema_name,
+        change_dir: core_instructions
+            .change_dir
+            .to_string_lossy()
+            .replace('\\', "/"),
+        resolved_output_path: core_instructions
+            .resolved_output_path
+            .to_string_lossy()
+            .replace('\\', "/"),
+        description: core_instructions.description,
         instruction: if is_blocked {
             "Complete the dependencies above before creating this artifact.".to_string()
         } else {
-            format!("Create the {artifact_id} artifact for change \"{change_name}\".")
+            core_instructions.instruction.unwrap_or_else(|| {
+                format!(
+                    "Create the {} artifact for change \"{}\".",
+                    fallback_artifact_id, fallback_change_name
+                )
+            })
         },
         context,
-        rules,
-        template: prepend_create_time(template),
+        rules: Vec::new(),
+        template: prepend_create_time(&core_instructions.template),
         dependencies,
-        unlocks,
+        unlocks: core_instructions.unlocks,
         references,
-        skipped: false,
-        warning: None,
+        skipped: core_instructions.skipped.unwrap_or(false),
+        warning: core_instructions.warning,
     })
 }
 
@@ -429,14 +373,9 @@ pub async fn implement_instructions_command(
     )
     .await?;
 
-    let schema_name = options
-        .schema
-        .clone()
-        .unwrap_or_else(|| DEFAULT_SCHEMA.to_string());
-    validate_schema_exists(&schema_name, &project_root)?;
-
     let instructions =
-        generate_implement_instructions(&project_root, &change_name, Some(&schema_name)).await?;
+        generate_implement_instructions(&project_root, &change_name, options.schema.as_deref())
+            .await?;
 
     if options.json {
         print_json(&instructions);
@@ -474,13 +413,33 @@ pub async fn generate_implement_instructions(
     change_name: &str,
     schema_name: Option<&str>,
 ) -> anyhow::Result<ImplementInstructions> {
-    let schema = schema_name.unwrap_or(DEFAULT_SCHEMA);
     let change_dir = Path::new(project_root)
         .join("speckit")
         .join("changes")
         .join(change_name);
 
-    let tasks_path = change_dir.join("tasks.md");
+    let change_context = load_change_context(
+        Path::new(project_root),
+        change_name,
+        schema_name,
+        LoadChangeContextOptions {
+            change_dir: Some(change_dir.clone()),
+        },
+    )
+    .map_err(|error| anyhow::anyhow!("Unable to load change context: {error}"))?;
+    let schema = change_context.schema_name.as_str();
+    let implement_phase = change_context.graph.schema().implement.as_ref();
+    let tracking_file = implement_phase
+        .and_then(|phase| phase.tracks.as_deref())
+        .unwrap_or("tasks.md");
+    let tasks_path = change_dir.join(tracking_file);
+    let required_artifacts = implement_phase
+        .map(|phase| phase.requires.clone())
+        .unwrap_or_default();
+    let missing_artifacts: Vec<String> = required_artifacts
+        .into_iter()
+        .filter(|artifact_id| !change_context.completed.contains(artifact_id))
+        .collect();
 
     // Parse tasks
     let (tasks, total, complete, remaining) = if tasks_path.exists() {
@@ -506,46 +465,40 @@ pub async fn generate_implement_instructions(
         (Vec::new(), 0, 0, 0)
     };
 
-    // Build context files
+    // Build context files from every artifact in the active schema.
     let mut context_files: HashMap<String, Vec<String>> = HashMap::new();
-    let proposal = change_dir.join("proposal.md");
-    if proposal.exists() {
-        context_files.insert(
-            "proposal".to_string(),
-            vec![proposal.to_string_lossy().replace('\\', "/")],
-        );
-    }
-    let specs_dir = change_dir.join("specs");
-    if specs_dir.is_dir() {
-        if let Ok(rd) = std::fs::read_dir(&specs_dir) {
-            let specs: Vec<String> = rd
-                .filter_map(|e| e.ok())
-                .filter(|e| e.path().extension().map(|ext| ext == "md").unwrap_or(false))
-                .map(|e| e.path().to_string_lossy().replace('\\', "/"))
-                .collect();
-            if !specs.is_empty() {
-                context_files.insert("specs".to_string(), specs);
-            }
+    for artifact in change_context.graph.get_all_artifacts() {
+        let files = resolve_artifact_outputs(&change_dir, &artifact.generates)
+            .into_iter()
+            .map(|path| path.to_string_lossy().replace('\\', "/"))
+            .collect::<Vec<_>>();
+        if !files.is_empty() {
+            context_files.insert(artifact.id.clone(), files);
         }
-    }
-    let design = change_dir.join("design.md");
-    if design.exists() {
-        context_files.insert(
-            "design".to_string(),
-            vec![design.to_string_lossy().replace('\\', "/")],
-        );
     }
 
     // Determine state
-    let (state, instruction) = if !tasks_path.exists() {
+    let (state, instruction) = if !missing_artifacts.is_empty() {
         (
             "blocked".to_string(),
-            "The tasks.md file is missing and must be created.\nUse speckit-continue-change to generate the tracking file.".to_string(),
+            format!(
+                "Create the required artifacts before implementing this change: {}.",
+                missing_artifacts.join(", ")
+            ),
+        )
+    } else if !tasks_path.exists() {
+        (
+            "blocked".to_string(),
+            format!(
+                "The {tracking_file} file is missing and must be created.\nUse speckit-continue-change to generate the tracking file."
+            ),
         )
     } else if tasks.is_empty() {
         (
             "blocked".to_string(),
-            "The tasks.md file exists but contains no tasks to work on.\nAdd tasks to tasks.md or regenerate it with speckit-continue-change.".to_string(),
+            format!(
+                "The {tracking_file} file exists but contains no tasks to work on.\nAdd tasks to {tracking_file} or regenerate it with speckit-continue-change."
+            ),
         )
     } else if remaining == 0 && total > 0 {
         (
@@ -555,13 +508,18 @@ pub async fn generate_implement_instructions(
     } else {
         (
             "ready".to_string(),
-            "Read context files, work through pending tasks, mark complete as you go.\nPause if you hit blockers or need clarification.".to_string(),
+            implement_phase
+                .and_then(|phase| phase.instruction.clone())
+                .unwrap_or_else(|| "Read context files, work through pending tasks, mark complete as you go.\nPause if you hit blockers or need clarification.".to_string()),
         )
     };
 
     // Load references
     let registry = read_registry_snapshot().await;
     let project_config = read_project_config(project_root);
+    let core_project_config =
+        speckit_core::project_config::read_project_config(Path::new(project_root));
+    let operation_inputs = load_operation_inputs(core_project_config.as_ref(), "implement");
     let references_decl = project_config
         .as_ref()
         .map(|c| c.references.clone())
@@ -585,11 +543,15 @@ pub async fn generate_implement_instructions(
         },
         tasks,
         state,
-        missing_artifacts: None,
+        missing_artifacts: if missing_artifacts.is_empty() {
+            None
+        } else {
+            Some(missing_artifacts)
+        },
         instruction,
         references,
-        context: None,
-        operation_guidance: None,
+        context: operation_inputs.context,
+        operation_guidance: operation_inputs.operation_guidance,
     })
 }
 

@@ -111,7 +111,7 @@ impl ArchiveCommand {
 
         // ── 3. Read metadata for skip_specs / retire_capabilities ──────────
         // Invalid metadata → error, blocks archive (no silent defaults).
-        let metadata = change_metadata::read_change_metadata(&change_dir)?;
+        let metadata = change_metadata::read_change_metadata(&change_dir, &project_path)?;
         let effective_skip_specs =
             options.skip_specs || metadata.as_ref().map_or(false, |m| m.skip_specs);
         let retire_declared =
