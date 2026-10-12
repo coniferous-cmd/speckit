@@ -1,6 +1,6 @@
 {
   "name": "@coniferous-cmd/speckit-darwin-arm64",
-  "version": "1.9.0",
+  "version": "1.10.0",
   "description": "speckit native binary for macOS ARM64 (Apple Silicon)",
   "license": "MIT",
   "repository": {

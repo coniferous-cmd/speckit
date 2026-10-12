@@ -1,6 +1,6 @@
 {
   "name": "@coniferous-cmd/speckit",
-  "version": "1.9.0",
+  "version": "1.10.0",
   "description": "AI-native system for spec-driven development",
   "license": "MIT",
   "repository": {
@@ -15,10 +15,10 @@
     "postinstall": "node lib/install.js"
   },
   "optionalDependencies": {
-    "@coniferous-cmd/speckit-darwin-arm64": "1.9.0",
-    "@coniferous-cmd/speckit-darwin-x64": "1.9.0",
-    "@coniferous-cmd/speckit-linux-x64": "1.9.0",
-    "@coniferous-cmd/speckit-win32-x64": "1.9.0"
+    "@coniferous-cmd/speckit-darwin-arm64": "1.10.0",
+    "@coniferous-cmd/speckit-darwin-x64": "1.10.0",
+    "@coniferous-cmd/speckit-linux-x64": "1.10.0",
+    "@coniferous-cmd/speckit-win32-x64": "1.10.0"
   },
   "engines": {
     "node": ">=14"

@@ -1,6 +1,6 @@
 {
   "name": "@coniferous-cmd/speckit-win32-x64",
-  "version": "1.9.0",
+  "version": "1.10.0",
   "description": "speckit native binary for Windows x64",
   "license": "MIT",
   "repository": {
