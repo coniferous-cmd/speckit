@@ -1,7 +1,7 @@
 //! Lingma Command Adapter
 //!
 //! Formats commands for Lingma following its frontmatter specification.
-//! File path: .lingma/commands/opsx/<id>.md
+//! File path: .lingma/commands/specx/<id>.md
 //! Frontmatter: name, description, category, tags
 
 use crate::command_generation::types::{CommandContent, ToolCommandAdapter};
@@ -15,7 +15,7 @@ impl ToolCommandAdapter for LingmaAdapter {
     }
 
     fn get_file_path(&self, command_id: &str) -> String {
-        format!(".lingma/commands/opsx/{}.md", command_id)
+        format!(".lingma/commands/specx/{}.md", command_id)
     }
 
     fn format_file(&self, content: &CommandContent) -> String {

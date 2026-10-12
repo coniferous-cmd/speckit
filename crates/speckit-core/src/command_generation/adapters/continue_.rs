@@ -1,7 +1,7 @@
 //! Continue Command Adapter
 //!
 //! Formats commands for Continue following its .prompt specification.
-//! File path: .continue/prompts/opsx-<id>.prompt
+//! File path: .continue/prompts/specx-<id>.prompt
 //! Frontmatter: name, description, invokable
 
 use crate::command_generation::types::{CommandContent, ToolCommandAdapter};
@@ -15,13 +15,13 @@ impl ToolCommandAdapter for ContinueAdapter {
     }
 
     fn get_file_path(&self, command_id: &str) -> String {
-        format!(".continue/prompts/opsx-{}.prompt", command_id)
+        format!(".continue/prompts/specx-{}.prompt", command_id)
     }
 
     fn format_file(&self, content: &CommandContent) -> String {
         format!(
             "---\nname: {}\ndescription: {}\ninvokable: true\n---\n\n{}\n",
-            escape_yaml_value(&format!("opsx-{}", content.id)),
+            escape_yaml_value(&format!("specx-{}", content.id)),
             escape_yaml_value(&content.description),
             content.body
         )

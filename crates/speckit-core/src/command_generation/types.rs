@@ -57,9 +57,9 @@ pub struct GeneratedCommand {
 /// How a tool spells its Speckit commands.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CommandInvocationStyle {
-    /// The command file lives in an `opsx/` subdirectory; the tool registers `opsx:<id>`
+    /// The command file lives in an `specx/` subdirectory; the tool registers `specx:<id>`
     Namespaced,
-    /// The command file uses an `opsx-` filename prefix; the tool registers `opsx-<id>`
+    /// The command file uses an `specx-` filename prefix; the tool registers `specx-<id>`
     Flat,
 }
 

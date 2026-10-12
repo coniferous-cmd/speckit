@@ -1,7 +1,7 @@
 //! CoStrict Command Adapter
 //!
 //! Formats commands for CoStrict following its frontmatter specification.
-//! File path: .cospec/speckit/commands/opsx-<id>.md
+//! File path: .cospec/speckit/commands/specx-<id>.md
 //! Frontmatter: description, argument-hint
 
 use crate::command_generation::types::{CommandContent, ToolCommandAdapter};
@@ -15,7 +15,7 @@ impl ToolCommandAdapter for CostrictAdapter {
     }
 
     fn get_file_path(&self, command_id: &str) -> String {
-        format!(".cospec/speckit/commands/opsx-{}.md", command_id)
+        format!(".cospec/speckit/commands/specx-{}.md", command_id)
     }
 
     fn format_file(&self, content: &CommandContent) -> String {

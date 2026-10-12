@@ -1,7 +1,7 @@
 //! Kiro Command Adapter
 //!
 //! Formats commands for Kiro following its .prompt.md specification.
-//! File path: .kiro/prompts/opsx-<id>.prompt.md
+//! File path: .kiro/prompts/specx-<id>.prompt.md
 //! Frontmatter: description
 
 use crate::command_generation::types::{CommandContent, ToolCommandAdapter};
@@ -15,7 +15,7 @@ impl ToolCommandAdapter for KiroAdapter {
     }
 
     fn get_file_path(&self, command_id: &str) -> String {
-        format!(".kiro/prompts/opsx-{}.prompt.md", command_id)
+        format!(".kiro/prompts/specx-{}.prompt.md", command_id)
     }
 
     fn format_file(&self, content: &CommandContent) -> String {

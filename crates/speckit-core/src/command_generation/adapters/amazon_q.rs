@@ -1,11 +1,11 @@
 //! Amazon Q Developer Command Adapter
 //!
 //! Formats commands for Amazon Q Developer following its frontmatter specification.
-//! File path: .amazonq/prompts/opsx-<id>.md
+//! File path: .amazonq/prompts/specx-<id>.md
 //! Frontmatter: description
 //!
 //! Amazon Q surfaces these files as its prompt library rather than as slash
-//! commands: the user types `@opsx-propose`, not `/opsx-propose`.
+//! commands: the user types `@specx-propose`, not `/specx-propose`.
 
 use crate::command_generation::types::{CommandContent, ToolCommandAdapter};
 use crate::command_generation::yaml::escape_yaml_value;
@@ -18,7 +18,7 @@ impl ToolCommandAdapter for AmazonQAdapter {
     }
 
     fn get_file_path(&self, command_id: &str) -> String {
-        format!(".amazonq/prompts/opsx-{}.md", command_id)
+        format!(".amazonq/prompts/specx-{}.md", command_id)
     }
 
     fn invocation_prefix(&self) -> Option<&str> {

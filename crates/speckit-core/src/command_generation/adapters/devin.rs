@@ -2,7 +2,7 @@
 //!
 //! Formats commands for Devin Desktop following its frontmatter specification.
 //! Devin Desktop reads Cascade-style workflows from `.devin/workflows/`.
-//! File path: .devin/workflows/opsx-<id>.md
+//! File path: .devin/workflows/specx-<id>.md
 //! Frontmatter: name, description, category, tags
 
 use crate::command_generation::types::{CommandContent, ToolCommandAdapter};
@@ -16,7 +16,7 @@ impl ToolCommandAdapter for DevinAdapter {
     }
 
     fn get_file_path(&self, command_id: &str) -> String {
-        format!(".devin/workflows/opsx-{}.md", command_id)
+        format!(".devin/workflows/specx-{}.md", command_id)
     }
 
     fn format_file(&self, content: &CommandContent) -> String {

@@ -2,7 +2,7 @@
 //!
 //! Formats commands for ZCode following its frontmatter specification.
 //! ZCode shares Claude Code's command format conventions.
-//! File path: .zcode/commands/opsx/<id>.md
+//! File path: .zcode/commands/specx/<id>.md
 //! Frontmatter: name, description, category, tags
 
 use crate::command_generation::types::{CommandContent, ToolCommandAdapter};
@@ -16,7 +16,7 @@ impl ToolCommandAdapter for ZcodeAdapter {
     }
 
     fn get_file_path(&self, command_id: &str) -> String {
-        format!(".zcode/commands/opsx/{}.md", command_id)
+        format!(".zcode/commands/specx/{}.md", command_id)
     }
 
     fn format_file(&self, content: &CommandContent) -> String {

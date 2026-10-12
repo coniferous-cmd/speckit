@@ -1,11 +1,11 @@
 //! Bob Shell Command Adapter
 //!
 //! Formats commands for Bob Shell following its markdown specification.
-//! File path: .bob/commands/opsx-<id>.md
+//! File path: .bob/commands/specx-<id>.md
 //! Frontmatter: description
 //!
 //! Bob uses the filename (minus .md) as the slash command name, so
-//! opsx-propose.md -> /opsx-propose.
+//! specx-propose.md -> /specx-propose.
 
 use crate::command_generation::types::{CommandContent, ToolCommandAdapter};
 use crate::command_generation::yaml::escape_yaml_value;
@@ -18,7 +18,7 @@ impl ToolCommandAdapter for BobAdapter {
     }
 
     fn get_file_path(&self, command_id: &str) -> String {
-        format!(".bob/commands/opsx-{}.md", command_id)
+        format!(".bob/commands/specx-{}.md", command_id)
     }
 
     fn format_file(&self, content: &CommandContent) -> String {

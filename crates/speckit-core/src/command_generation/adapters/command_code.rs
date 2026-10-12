@@ -2,7 +2,7 @@
 //!
 //! Command Code reads custom slash commands from `.commandcode/commands/`. The
 //! command name is the markdown filename without its `.md` extension, so
-//! `opsx-<id>.md` registers `/opsx-<id>` — the same flat naming Cursor and
+//! `specx-<id>.md` registers `/specx-<id>` — the same flat naming Cursor and
 //! OpenCode use.
 
 use crate::command_generation::types::{CommandContent, ToolCommandAdapter};
@@ -39,7 +39,7 @@ impl ToolCommandAdapter for CommandCodeAdapter {
     }
 
     fn get_file_path(&self, command_id: &str) -> String {
-        format!(".commandcode/commands/opsx-{}.md", command_id)
+        format!(".commandcode/commands/specx-{}.md", command_id)
     }
 
     fn format_file(&self, content: &CommandContent) -> String {

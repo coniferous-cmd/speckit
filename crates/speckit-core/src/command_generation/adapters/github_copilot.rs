@@ -1,7 +1,7 @@
 //! GitHub Copilot Command Adapter
 //!
 //! Formats commands for GitHub Copilot following its .prompt.md specification.
-//! File path: .github/prompts/opsx-<id>.prompt.md
+//! File path: .github/prompts/specx-<id>.prompt.md
 //! Frontmatter: description
 
 use crate::command_generation::types::{CommandContent, ToolCommandAdapter};
@@ -15,7 +15,7 @@ impl ToolCommandAdapter for GithubCopilotAdapter {
     }
 
     fn get_file_path(&self, command_id: &str) -> String {
-        format!(".github/prompts/opsx-{}.prompt.md", command_id)
+        format!(".github/prompts/specx-{}.prompt.md", command_id)
     }
 
     fn format_file(&self, content: &CommandContent) -> String {

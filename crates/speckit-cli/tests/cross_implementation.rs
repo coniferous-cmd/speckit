@@ -400,7 +400,7 @@ fn init_and_update_generate_implement_surfaces_for_each_delivery_mode() {
         "commands init failed: {}",
         String::from_utf8_lossy(&commands_init.stderr)
     );
-    assert!(project.join(".qwen/commands/opsx-implement.md").is_file());
+    assert!(project.join(".qwen/commands/specx-implement.md").is_file());
     assert!(
         !project
             .join(".qwen/skills/speckit-implement-change/SKILL.md")
@@ -436,7 +436,11 @@ fn init_and_update_generate_implement_surfaces_for_each_delivery_mode() {
             .join(".amazonq/skills/speckit-implement-change/SKILL.md")
             .is_file()
     );
-    assert!(project.join(".amazonq/prompts/opsx-implement.md").is_file());
+    assert!(
+        project
+            .join(".amazonq/prompts/specx-implement.md")
+            .is_file()
+    );
 }
 
 #[test]

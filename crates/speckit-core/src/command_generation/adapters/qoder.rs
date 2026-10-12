@@ -1,7 +1,7 @@
 //! Qoder Command Adapter
 //!
 //! Formats commands for Qoder following its frontmatter specification.
-//! File path: .qoder/commands/opsx/<id>.md
+//! File path: .qoder/commands/specx/<id>.md
 //! Frontmatter: name, description, category, tags
 
 use crate::command_generation::types::{CommandContent, ToolCommandAdapter};
@@ -15,7 +15,7 @@ impl ToolCommandAdapter for QoderAdapter {
     }
 
     fn get_file_path(&self, command_id: &str) -> String {
-        format!(".qoder/commands/opsx/{}.md", command_id)
+        format!(".qoder/commands/specx/{}.md", command_id)
     }
 
     fn format_file(&self, content: &CommandContent) -> String {

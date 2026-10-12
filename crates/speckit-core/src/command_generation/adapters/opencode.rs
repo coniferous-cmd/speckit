@@ -1,7 +1,7 @@
 //! OpenCode Command Adapter
 //!
 //! Formats commands for OpenCode following its frontmatter specification.
-//! File path: .opencode/commands/opsx-<id>.md
+//! File path: .opencode/commands/specx-<id>.md
 //! Frontmatter: description
 
 use crate::command_generation::types::{CommandContent, ToolCommandAdapter};
@@ -15,7 +15,7 @@ impl ToolCommandAdapter for OpencodeAdapter {
     }
 
     fn get_file_path(&self, command_id: &str) -> String {
-        format!(".opencode/commands/opsx-{}.md", command_id)
+        format!(".opencode/commands/specx-{}.md", command_id)
     }
 
     fn format_file(&self, content: &CommandContent) -> String {

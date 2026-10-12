@@ -1,11 +1,11 @@
 //! Oh My Pi (OMP) Command Adapter
 //!
 //! Formats commands for Oh My Pi following its slash command specification.
-//! File path: .omp/commands/opsx-<id>.md
+//! File path: .omp/commands/specx-<id>.md
 //! Frontmatter: description
 //!
 //! OMP uses the filename (minus .md) as the slash command name, so
-//! opsx-propose.md -> /opsx-propose. $@ is injected after **Input**:
+//! specx-propose.md -> /specx-propose. $@ is injected after **Input**:
 //! headings so user-supplied arguments are visible to the agent.
 
 use crate::command_generation::types::{CommandContent, ToolCommandAdapter};
@@ -41,7 +41,7 @@ impl ToolCommandAdapter for OhMyPiAdapter {
     }
 
     fn get_file_path(&self, command_id: &str) -> String {
-        format!(".omp/commands/opsx-{}.md", command_id)
+        format!(".omp/commands/specx-{}.md", command_id)
     }
 
     fn format_file(&self, content: &CommandContent) -> String {

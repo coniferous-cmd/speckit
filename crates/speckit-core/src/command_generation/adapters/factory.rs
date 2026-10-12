@@ -1,7 +1,7 @@
 //! Factory Droid Command Adapter
 //!
 //! Formats commands for Factory Droid following its frontmatter specification.
-//! File path: .factory/commands/opsx-<id>.md
+//! File path: .factory/commands/specx-<id>.md
 //! Frontmatter: description, argument-hint
 
 use crate::command_generation::types::{CommandContent, ToolCommandAdapter};
@@ -15,7 +15,7 @@ impl ToolCommandAdapter for FactoryAdapter {
     }
 
     fn get_file_path(&self, command_id: &str) -> String {
-        format!(".factory/commands/opsx-{}.md", command_id)
+        format!(".factory/commands/specx-{}.md", command_id)
     }
 
     fn format_file(&self, content: &CommandContent) -> String {

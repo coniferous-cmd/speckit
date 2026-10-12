@@ -165,8 +165,8 @@ fn instructions_use_speckit_commands() {
     let entries = get_skill_templates(None);
     for entry in &entries {
         assert!(
-            !entry.template.instructions.contains("/opsx:"),
-            "instructions for `{}` still mention `/opsx:` slash command",
+            !entry.template.instructions.contains("/specx:"),
+            "instructions for `{}` still mention `/specx:` slash command",
             entry.workflow_id
         );
     }

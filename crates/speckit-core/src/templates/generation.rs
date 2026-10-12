@@ -95,42 +95,42 @@ pub fn get_command_templates(workflow_filter: Option<&[String]>) -> Vec<CommandT
     let all: Vec<CommandTemplateEntry> = vec![
         cmd_entry(
             "explore",
-            super::workflows::get_opsx_explore_command_template(),
+            super::workflows::get_specx_explore_command_template(),
         ),
-        cmd_entry("new", super::workflows::get_opsx_new_command_template()),
+        cmd_entry("new", super::workflows::get_specx_new_command_template()),
         cmd_entry(
             "continue",
-            super::workflows::get_opsx_continue_command_template(),
+            super::workflows::get_specx_continue_command_template(),
         ),
         cmd_entry(
             "implement",
-            super::workflows::get_opsx_implement_command_template(),
+            super::workflows::get_specx_implement_command_template(),
         ),
         cmd_entry(
             "update",
-            super::workflows::get_opsx_update_command_template(),
+            super::workflows::get_specx_update_command_template(),
         ),
-        cmd_entry("ff", super::workflows::get_opsx_ff_command_template()),
-        cmd_entry("sync", super::workflows::get_opsx_sync_command_template()),
+        cmd_entry("ff", super::workflows::get_specx_ff_command_template()),
+        cmd_entry("sync", super::workflows::get_specx_sync_command_template()),
         cmd_entry(
             "archive",
-            super::workflows::get_opsx_archive_command_template(),
+            super::workflows::get_specx_archive_command_template(),
         ),
         cmd_entry(
             "bulk-archive",
-            super::workflows::get_opsx_bulk_archive_command_template(),
+            super::workflows::get_specx_bulk_archive_command_template(),
         ),
         cmd_entry(
             "verify",
-            super::workflows::get_opsx_verify_command_template(),
+            super::workflows::get_specx_verify_command_template(),
         ),
         cmd_entry(
             "onboard",
-            super::workflows::get_opsx_onboard_command_template(),
+            super::workflows::get_specx_onboard_command_template(),
         ),
         cmd_entry(
             "propose",
-            super::workflows::get_opsx_propose_command_template(),
+            super::workflows::get_specx_propose_command_template(),
         ),
     ];
 
@@ -179,7 +179,7 @@ pub fn get_command_contents(
 /// whether to regenerate).
 ///
 /// `transform_instructions` is applied to the template body before emission;
-/// the surface-specific generators use it to swap `/opsx:*` -> `/speckit:*`
+/// the surface-specific generators use it to swap `/specx:*` -> `/speckit:*`
 /// in the embedded slash-command references for command templates, and to
 /// apply brand substitution when content is generated for verification.
 pub fn generate_skill_content(

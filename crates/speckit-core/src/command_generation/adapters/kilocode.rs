@@ -2,7 +2,7 @@
 //!
 //! Formats commands for Kilo Code following its workflow specification.
 //! Kilo Code workflows don't use frontmatter.
-//! File path: .kilocode/workflows/opsx-<id>.md
+//! File path: .kilocode/workflows/specx-<id>.md
 //! Format: Plain markdown without frontmatter
 
 use crate::command_generation::types::{CommandContent, ToolCommandAdapter};
@@ -15,7 +15,7 @@ impl ToolCommandAdapter for KilocodeAdapter {
     }
 
     fn get_file_path(&self, command_id: &str) -> String {
-        format!(".kilocode/workflows/opsx-{}.md", command_id)
+        format!(".kilocode/workflows/specx-{}.md", command_id)
     }
 
     fn format_file(&self, content: &CommandContent) -> String {

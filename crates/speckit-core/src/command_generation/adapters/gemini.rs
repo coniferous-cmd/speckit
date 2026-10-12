@@ -1,7 +1,7 @@
 //! Gemini CLI Command Adapter
 //!
 //! Formats commands for Gemini CLI following its TOML specification.
-//! File path: .gemini/commands/opsx/<id>.toml
+//! File path: .gemini/commands/specx/<id>.toml
 //! Format: TOML with description and prompt fields
 
 use crate::command_generation::types::{CommandContent, ToolCommandAdapter};
@@ -63,7 +63,7 @@ impl ToolCommandAdapter for GeminiAdapter {
     }
 
     fn get_file_path(&self, command_id: &str) -> String {
-        format!(".gemini/commands/opsx/{}.toml", command_id)
+        format!(".gemini/commands/specx/{}.toml", command_id)
     }
 
     fn format_file(&self, content: &CommandContent) -> String {

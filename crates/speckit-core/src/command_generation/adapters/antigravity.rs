@@ -1,7 +1,7 @@
 //! Antigravity Command Adapter
 //!
 //! Formats commands for Antigravity following its frontmatter specification.
-//! File path: .agent/workflows/opsx-<id>.md
+//! File path: .agent/workflows/specx-<id>.md
 //! Frontmatter: description
 
 use crate::command_generation::types::{CommandContent, ToolCommandAdapter};
@@ -15,7 +15,7 @@ impl ToolCommandAdapter for AntigravityAdapter {
     }
 
     fn get_file_path(&self, command_id: &str) -> String {
-        format!(".agent/workflows/opsx-{}.md", command_id)
+        format!(".agent/workflows/specx-{}.md", command_id)
     }
 
     fn format_file(&self, content: &CommandContent) -> String {

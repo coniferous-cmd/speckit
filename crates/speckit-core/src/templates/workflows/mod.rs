@@ -34,7 +34,7 @@ pub fn get_explore_skill_template() -> SkillTemplate {
     }
 }
 
-pub fn get_opsx_explore_command_template() -> CommandTemplate {
+pub fn get_specx_explore_command_template() -> CommandTemplate {
     CommandTemplate {
         name: "SPECKIT: Explore".into(),
         description:
@@ -66,7 +66,7 @@ pub fn get_new_change_skill_template() -> SkillTemplate {
     }
 }
 
-pub fn get_opsx_new_command_template() -> CommandTemplate {
+pub fn get_specx_new_command_template() -> CommandTemplate {
     CommandTemplate {
         name: "SPECKIT: New".into(),
         description: "Start a new change using the experimental artifact workflow".into(),
@@ -91,7 +91,7 @@ pub fn get_continue_change_skill_template() -> SkillTemplate {
     }
 }
 
-pub fn get_opsx_continue_command_template() -> CommandTemplate {
+pub fn get_specx_continue_command_template() -> CommandTemplate {
     CommandTemplate {
         name: "SPECKIT: Continue".into(),
         description: "Continue working on a change - create the next artifact (Experimental)"
@@ -117,7 +117,7 @@ pub fn get_implement_change_skill_template() -> SkillTemplate {
     }
 }
 
-pub fn get_opsx_implement_command_template() -> CommandTemplate {
+pub fn get_specx_implement_command_template() -> CommandTemplate {
     CommandTemplate {
         name: "SPECKIT: Implement".into(),
         description: "Implement tasks from an Speckit change (Experimental)".into(),
@@ -142,7 +142,7 @@ pub fn get_update_change_skill_template() -> SkillTemplate {
     }
 }
 
-pub fn get_opsx_update_command_template() -> CommandTemplate {
+pub fn get_specx_update_command_template() -> CommandTemplate {
     CommandTemplate {
         name: "SPECKIT: Update".into(),
         description: "Update a change - revise existing planning artifacts and keep them coherent"
@@ -168,7 +168,7 @@ pub fn get_ff_change_skill_template() -> SkillTemplate {
     }
 }
 
-pub fn get_opsx_ff_command_template() -> CommandTemplate {
+pub fn get_specx_ff_command_template() -> CommandTemplate {
     CommandTemplate {
         name: "SPECKIT: Fast Forward".into(),
         description:
@@ -194,7 +194,7 @@ pub fn get_sync_specs_skill_template() -> SkillTemplate {
     }
 }
 
-pub fn get_opsx_sync_command_template() -> CommandTemplate {
+pub fn get_specx_sync_command_template() -> CommandTemplate {
     CommandTemplate {
         name: "SPECKIT: Sync".into(),
         description: "Sync delta specs from a change to main specs".into(),
@@ -219,7 +219,7 @@ pub fn get_archive_change_skill_template() -> SkillTemplate {
     }
 }
 
-pub fn get_opsx_archive_command_template() -> CommandTemplate {
+pub fn get_specx_archive_command_template() -> CommandTemplate {
     CommandTemplate {
         name: "SPECKIT: Archive".into(),
         description: "Archive a completed change in the experimental workflow".into(),
@@ -244,7 +244,7 @@ pub fn get_bulk_archive_change_skill_template() -> SkillTemplate {
     }
 }
 
-pub fn get_opsx_bulk_archive_command_template() -> CommandTemplate {
+pub fn get_specx_bulk_archive_command_template() -> CommandTemplate {
     CommandTemplate {
         name: "SPECKIT: Bulk Archive".into(),
         description: "Archive multiple completed changes at once".into(),
@@ -274,7 +274,7 @@ pub fn get_verify_change_skill_template() -> SkillTemplate {
     }
 }
 
-pub fn get_opsx_verify_command_template() -> CommandTemplate {
+pub fn get_specx_verify_command_template() -> CommandTemplate {
     CommandTemplate {
         name: "SPECKIT: Verify".into(),
         description: "Verify implementation matches change artifacts before archiving".into(),
@@ -300,7 +300,7 @@ pub fn get_onboard_skill_template() -> SkillTemplate {
     }
 }
 
-pub fn get_opsx_onboard_command_template() -> CommandTemplate {
+pub fn get_specx_onboard_command_template() -> CommandTemplate {
     CommandTemplate {
         name: "SPECKIT: Onboard".into(),
         description: "Guided onboarding - walk through a complete Speckit workflow cycle".into(),
@@ -330,7 +330,7 @@ pub fn get_propose_skill_template() -> SkillTemplate {
     }
 }
 
-pub fn get_opsx_propose_command_template() -> CommandTemplate {
+pub fn get_specx_propose_command_template() -> CommandTemplate {
     CommandTemplate {
         name: "SPECKIT: Propose".into(),
         description: "Propose a new change - create it and generate all artifacts in one step"

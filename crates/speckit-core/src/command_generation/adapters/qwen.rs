@@ -3,7 +3,7 @@
 //! Formats commands for Qwen Code following its Markdown custom command
 //! specification. Qwen Code has deprecated TOML commands in favor of
 //! Markdown files with YAML frontmatter.
-//! File path: .qwen/commands/opsx-<id>.md
+//! File path: .qwen/commands/specx-<id>.md
 //! Format: Markdown with description frontmatter
 
 use crate::command_generation::types::{CommandContent, ToolCommandAdapter};
@@ -17,7 +17,7 @@ impl ToolCommandAdapter for QwenAdapter {
     }
 
     fn get_file_path(&self, command_id: &str) -> String {
-        format!(".qwen/commands/opsx-{}.md", command_id)
+        format!(".qwen/commands/specx-{}.md", command_id)
     }
 
     fn format_file(&self, content: &CommandContent) -> String {

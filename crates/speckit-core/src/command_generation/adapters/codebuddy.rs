@@ -1,7 +1,7 @@
 //! CodeBuddy Command Adapter
 //!
 //! Formats commands for CodeBuddy following its frontmatter specification.
-//! File path: .codebuddy/commands/opsx/<id>.md
+//! File path: .codebuddy/commands/specx/<id>.md
 //! Frontmatter: name, description, argument-hint
 
 use crate::command_generation::types::{CommandContent, ToolCommandAdapter};
@@ -15,7 +15,7 @@ impl ToolCommandAdapter for CodebuddyAdapter {
     }
 
     fn get_file_path(&self, command_id: &str) -> String {
-        format!(".codebuddy/commands/opsx/{}.md", command_id)
+        format!(".codebuddy/commands/specx/{}.md", command_id)
     }
 
     fn format_file(&self, content: &CommandContent) -> String {

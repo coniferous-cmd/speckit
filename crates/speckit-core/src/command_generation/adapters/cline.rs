@@ -2,7 +2,7 @@
 //!
 //! Formats commands for Cline following its workflow specification.
 //! Cline uses markdown headers instead of YAML frontmatter.
-//! File path: .clinerules/workflows/opsx-<id>.md
+//! File path: .clinerules/workflows/specx-<id>.md
 //! Format: Markdown header with description
 
 use crate::command_generation::types::{CommandContent, ToolCommandAdapter};
@@ -15,7 +15,7 @@ impl ToolCommandAdapter for ClineAdapter {
     }
 
     fn get_file_path(&self, command_id: &str) -> String {
-        format!(".clinerules/workflows/opsx-{}.md", command_id)
+        format!(".clinerules/workflows/specx-{}.md", command_id)
     }
 
     fn format_file(&self, content: &CommandContent) -> String {

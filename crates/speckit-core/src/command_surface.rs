@@ -48,9 +48,9 @@ fn to_generation_delivery(delivery: Delivery) -> crate::command_generation::Deli
 pub fn resolve_command_invocation(tool_id: &str) -> Option<CommandInvocation> {
     crate::command_generation::resolve_command_invocation(tool_id).map(|invocation| {
         CommandInvocation {
-            // The legacy facade exposes the logical namespace (`opsx`), not
+            // The legacy facade exposes the logical namespace (`specx`), not
             // the tool-specific literal prefix (`/`, `@`, ...).
-            prefix: "opsx".to_string(),
+            prefix: "specx".to_string(),
             separator: match invocation.style {
                 crate::command_generation::CommandInvocationStyle::Namespaced => ":".to_string(),
                 crate::command_generation::CommandInvocationStyle::Flat => "-".to_string(),
@@ -137,7 +137,7 @@ mod tests {
     #[test]
     fn resolve_command_invocation_for_adapter_backed() {
         let inv = resolve_command_invocation("claude").unwrap();
-        assert_eq!(inv.prefix, "opsx");
+        assert_eq!(inv.prefix, "specx");
         assert_eq!(inv.separator, ":");
     }
 

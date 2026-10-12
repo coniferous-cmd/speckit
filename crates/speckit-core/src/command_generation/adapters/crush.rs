@@ -1,7 +1,7 @@
 //! Crush Command Adapter
 //!
 //! Formats commands for Crush following its frontmatter specification.
-//! File path: .crush/commands/opsx/<id>.md
+//! File path: .crush/commands/specx/<id>.md
 //! Frontmatter: name, description, category, tags
 
 use crate::command_generation::types::{CommandContent, ToolCommandAdapter};
@@ -15,7 +15,7 @@ impl ToolCommandAdapter for CrushAdapter {
     }
 
     fn get_file_path(&self, command_id: &str) -> String {
-        format!(".crush/commands/opsx/{}.md", command_id)
+        format!(".crush/commands/specx/{}.md", command_id)
     }
 
     fn format_file(&self, content: &CommandContent) -> String {

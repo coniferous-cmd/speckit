@@ -1,7 +1,7 @@
 //! Auggie (Augment CLI) Command Adapter
 //!
 //! Formats commands for Auggie following its frontmatter specification.
-//! File path: .augment/commands/opsx-<id>.md
+//! File path: .augment/commands/specx-<id>.md
 //! Frontmatter: description, argument-hint
 
 use crate::command_generation::types::{CommandContent, ToolCommandAdapter};
@@ -15,7 +15,7 @@ impl ToolCommandAdapter for AuggieAdapter {
     }
 
     fn get_file_path(&self, command_id: &str) -> String {
-        format!(".augment/commands/opsx-{}.md", command_id)
+        format!(".augment/commands/specx-{}.md", command_id)
     }
 
     fn format_file(&self, content: &CommandContent) -> String {

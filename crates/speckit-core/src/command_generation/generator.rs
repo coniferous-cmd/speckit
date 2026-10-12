@@ -9,9 +9,9 @@ use super::types::{CommandContent, GeneratedCommand, ToolCommandAdapter};
 
 /// Generate a single command file using the provided adapter.
 ///
-/// Command bodies are authored with `/opsx:<id>` references. Tools whose command
-/// files are invoked by filename register `/opsx-<id>` instead, and Amazon Q
-/// surfaces them in its prompt library as `@opsx-<id>`, so the body is rewritten
+/// Command bodies are authored with `/specx:<id>` references. Tools whose command
+/// files are invoked by filename register `/specx-<id>` instead, and Amazon Q
+/// surfaces them in its prompt library as `@specx-<id>`, so the body is rewritten
 /// to the form that tool answers to before the adapter formats it. Doing it here
 /// rather than per adapter keeps every tool in step; adapters stay pure formatters.
 pub fn generate_command(

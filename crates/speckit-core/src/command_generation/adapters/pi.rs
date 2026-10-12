@@ -1,11 +1,11 @@
 //! Pi Command Adapter
 //!
 //! Formats commands for Pi (pi.dev) following its prompt template specification.
-//! File path: .pi/prompts/opsx-<id>.md
+//! File path: .pi/prompts/specx-<id>.md
 //! Frontmatter: description
 //!
 //! Pi uses the filename (minus .md) as the slash command name, so
-//! opsx-propose.md -> /opsx-propose. $@ is injected after **Input**:
+//! specx-propose.md -> /specx-propose. $@ is injected after **Input**:
 //! headings so user-supplied arguments are visible to the agent.
 
 use crate::command_generation::types::{CommandContent, ToolCommandAdapter};
@@ -41,7 +41,7 @@ impl ToolCommandAdapter for PiAdapter {
     }
 
     fn get_file_path(&self, command_id: &str) -> String {
-        format!(".pi/prompts/opsx-{}.md", command_id)
+        format!(".pi/prompts/specx-{}.md", command_id)
     }
 
     fn format_file(&self, content: &CommandContent) -> String {

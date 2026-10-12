@@ -21,22 +21,22 @@ fn onboarding_commands() -> Vec<OnboardingCommand> {
     vec![
         OnboardingCommand {
             workflow: "propose".to_string(),
-            command: "/opsx:propose".to_string(),
+            command: "/specx:propose".to_string(),
             description: "Start a change".to_string(),
         },
         OnboardingCommand {
             workflow: "new".to_string(),
-            command: "/opsx:new".to_string(),
+            command: "/specx:new".to_string(),
             description: "Scaffold a change".to_string(),
         },
         OnboardingCommand {
             workflow: "continue".to_string(),
-            command: "/opsx:continue".to_string(),
+            command: "/specx:continue".to_string(),
             description: "Next artifact".to_string(),
         },
         OnboardingCommand {
             workflow: "implement".to_string(),
-            command: "/opsx:implement".to_string(),
+            command: "/specx:implement".to_string(),
             description: "Implement tasks".to_string(),
         },
     ]

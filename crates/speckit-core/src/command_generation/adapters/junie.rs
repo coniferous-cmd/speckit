@@ -1,7 +1,7 @@
 //! Junie Command Adapter
 //!
 //! Formats commands for Junie following its frontmatter specification.
-//! File path: .junie/commands/opsx-<id>.md
+//! File path: .junie/commands/specx-<id>.md
 //! Frontmatter: description
 
 use crate::command_generation::types::{CommandContent, ToolCommandAdapter};
@@ -15,7 +15,7 @@ impl ToolCommandAdapter for JunieAdapter {
     }
 
     fn get_file_path(&self, command_id: &str) -> String {
-        format!(".junie/commands/opsx-{}.md", command_id)
+        format!(".junie/commands/specx-{}.md", command_id)
     }
 
     fn format_file(&self, content: &CommandContent) -> String {

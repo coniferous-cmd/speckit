@@ -1,7 +1,7 @@
 //! Trae Command Adapter
 //!
 //! Formats commands for Trae IDE following its command specification.
-//! File path: .trae/commands/opsx-<id>.md
+//! File path: .trae/commands/specx-<id>.md
 //! Frontmatter: name, description
 
 use crate::command_generation::types::{CommandContent, ToolCommandAdapter};
@@ -15,7 +15,7 @@ impl ToolCommandAdapter for TraeAdapter {
     }
 
     fn get_file_path(&self, command_id: &str) -> String {
-        format!(".trae/commands/opsx-{}.md", command_id)
+        format!(".trae/commands/specx-{}.md", command_id)
     }
 
     fn format_file(&self, content: &CommandContent) -> String {

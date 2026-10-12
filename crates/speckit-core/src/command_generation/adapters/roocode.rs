@@ -2,7 +2,7 @@
 //!
 //! Formats commands for Zoo Code following its workflow specification.
 //! Zoo Code uses markdown headers instead of YAML frontmatter.
-//! File path: .roo/commands/opsx-<id>.md
+//! File path: .roo/commands/specx-<id>.md
 //! Format: Markdown header with description
 
 use crate::command_generation::types::{CommandContent, ToolCommandAdapter};
@@ -15,7 +15,7 @@ impl ToolCommandAdapter for RoocodeAdapter {
     }
 
     fn get_file_path(&self, command_id: &str) -> String {
-        format!(".roo/commands/opsx-{}.md", command_id)
+        format!(".roo/commands/specx-{}.md", command_id)
     }
 
     fn format_file(&self, content: &CommandContent) -> String {
