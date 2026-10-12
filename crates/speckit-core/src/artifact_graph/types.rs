@@ -45,7 +45,7 @@ pub struct ImplementPhase {
 /// The full structure of a schema YAML file.
 ///
 /// A schema defines the artifact workflow: the ordered set of artifacts that
-/// a change must produce, their dependencies, and optionally an apply phase.
+/// a change must produce, their dependencies, and optionally an implement phase.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SchemaYaml {
