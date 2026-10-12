@@ -138,6 +138,7 @@ pub struct StoreInspection {
     pub root: PathBuf,
     pub metadata_path: PathBuf,
     pub metadata: StoreInspectionMetadata,
+    pub speckit_root: crate::speckit_root::SpeckitRootInspection,
     pub git: StoreInspectionGit,
     pub diagnostics: Vec<StoreDiagnostic>,
 }
@@ -652,6 +653,21 @@ pub fn setup_prepared_store(
         })?;
     }
 
+    let root = crate::speckit_root::ensure_speckit_root(
+        store_root,
+        &crate::speckit_root::EnsureSpeckitRootOptions {
+            anchor_empty_directories: true,
+        },
+    )
+    .map_err(|message| {
+        StoreError::new(
+            message,
+            "store_setup_root_failed",
+            StoreErrorOptions::default(),
+        )
+    })?;
+    created_files.extend(root.created_artifacts);
+
     // Create the .speckit-store metadata dir if missing.
     let metadata_dir = get_store_metadata_dir(store_root);
     if path_kind(&metadata_dir) == MISSING {
@@ -795,6 +811,18 @@ pub fn register_existing_store(
     }
 
     assert_not_config_only_pointer_root(&store_root)?;
+
+    let inspection = crate::speckit_root::inspect_speckit_root(&store_root);
+    if !inspection.healthy {
+        return Err(StoreError::new(
+            inspection.diagnostics.iter().map(|d| d.message.as_str()).collect::<Vec<_>>().join(" "),
+            "unhealthy_store_root",
+            StoreErrorOptions {
+                target: Some("speckit.root".into()),
+                fix: Some("Run speckit store setup for a new store, or register a checkout with a complete speckit/ root.".into()),
+            },
+        ));
+    }
 
     let metadata = read_store_metadata_for_operation(&store_root)?;
     let explicit_id = match input.id.as_deref() {
@@ -1104,7 +1132,8 @@ pub fn list_stores() -> Result<StoreListResult, StoreError> {
 fn inspect_store(entry_id: &str, backend: &StoreGitBackendConfig) -> StoreInspection {
     let root = get_store_root_for_backend(backend);
     let metadata_path = get_store_metadata_path(&root);
-    let mut diagnostics: Vec<StoreDiagnostic> = Vec::new();
+    let speckit_root = crate::speckit_root::inspect_speckit_root(&root);
+    let mut diagnostics = speckit_root.diagnostics.clone();
 
     let kind = path_kind(&root);
     let mut metadata = StoreInspectionMetadata {
@@ -1260,6 +1289,7 @@ fn inspect_store(entry_id: &str, backend: &StoreGitBackendConfig) -> StoreInspec
         root,
         metadata_path,
         metadata,
+        speckit_root,
         git: git_info,
         diagnostics,
     }
