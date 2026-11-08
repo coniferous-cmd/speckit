@@ -53,9 +53,26 @@ pub use adapters::{
     PiAdapter, QoderAdapter, QwenAdapter, RoocodeAdapter, TraeAdapter, ZcodeAdapter,
 };
 
+/// Tools whose workflows are delivered exclusively as skills, even though a
+/// command adapter is registered for them.
+///
+/// Skill and command bodies are generated from the same canonical templates,
+/// so emitting slash-command files alongside skills only duplicates content.
+/// Claude Code reads the skills directly and invokes them on demand.
+pub const SKILLS_ONLY_TOOL_IDS: &[&str] = &["claude"];
+
+/// Whether a tool is delivered exclusively as skills.
+pub fn is_skills_only_tool(tool_id: &str) -> bool {
+    SKILLS_ONLY_TOOL_IDS.contains(&tool_id)
+}
+
 /// Resolves how a tool's generated commands are invoked.
-/// Returns None for tools with no command adapter.
+/// Returns None for tools with no command adapter, and for skills-only tools
+/// that never surface commands.
 pub fn resolve_command_invocation(tool_id: &str) -> Option<CommandInvocation> {
+    if is_skills_only_tool(tool_id) {
+        return None;
+    }
     let registry = CommandAdapterRegistry::global();
     registry
         .get(tool_id)
@@ -64,8 +81,9 @@ pub fn resolve_command_invocation(tool_id: &str) -> Option<CommandInvocation> {
 
 /// Resolves the command surface capability for a tool.
 pub fn resolve_command_surface_capability(tool_id: &str) -> CommandSurfaceCapability {
-    let registry = CommandAdapterRegistry::global();
-    if registry.has(tool_id) {
+    if is_skills_only_tool(tool_id) {
+        CommandSurfaceCapability::SkillsInvocable
+    } else if CommandAdapterRegistry::global().has(tool_id) {
         CommandSurfaceCapability::AdapterBacked
     } else if tool_id == "codex" {
         CommandSurfaceCapability::SkillsInvocable
@@ -92,8 +110,31 @@ pub fn should_generate_commands_for_tool(tool_id: &str, delivery: Delivery) -> b
         && resolve_command_surface_capability(tool_id) == CommandSurfaceCapability::AdapterBacked
 }
 
-/// Whether command files should be reconciled for a tool given the delivery mode.
+/// Whether command files should be reconciled (removed) for a tool.
+///
+/// True whenever a tool has a command adapter on disk but no longer emits
+/// commands — skills delivery, or a skills-only tool — so slash-command files
+/// from an earlier setup do not linger next to the skills.
 pub fn should_reconcile_command_files_for_tool(tool_id: &str, delivery: Delivery) -> bool {
-    delivery == Delivery::Skills
-        && resolve_command_surface_capability(tool_id) == CommandSurfaceCapability::AdapterBacked
+    CommandAdapterRegistry::global().has(tool_id)
+        && !should_generate_commands_for_tool(tool_id, delivery)
+}
+
+/// Removes every regular file directly inside a generated command directory and
+/// returns how many were removed.
+///
+/// Reconciliation only runs for tools that emit no commands, so anything found
+/// there is stale output from an earlier setup.
+pub fn remove_command_files(dir: &std::path::Path) -> usize {
+    let mut removed = 0;
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return 0;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_file() && std::fs::remove_file(&path).is_ok() {
+            removed += 1;
+        }
+    }
+    removed
 }

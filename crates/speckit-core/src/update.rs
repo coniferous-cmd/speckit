@@ -392,7 +392,8 @@ impl UpdateCommand {
             }
         }
 
-        // Reconcile: remove stale command files when delivery is skills-only
+        // Reconcile: remove command files for tools that no longer emit
+        // commands (skills delivery, or a skills-only tool such as Claude).
         if command_generation::should_reconcile_command_files_for_tool(tool_id, delivery) {
             if let Some(adapter) = CommandAdapterRegistry::global().get(tool_id) {
                 let command_dir_name = adapter
@@ -402,23 +403,10 @@ impl UpdateCommand {
                 if let Some(dir) = command_dir_name {
                     let dir_path = project_path.join(&dir);
                     if dir_path.exists() {
-                        let command_contents =
-                            crate::templates::generation::get_command_contents(workflow_filter);
-                        let active_ids: HashSet<&str> =
-                            command_contents.iter().map(|c| c.id.as_str()).collect();
-                        if let Ok(rd) = std::fs::read_dir(&dir_path) {
-                            for entry in rd.flatten() {
-                                let path = entry.path();
-                                if !path.is_file() {
-                                    continue;
-                                }
-                                let file_stem =
-                                    path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-                                if !active_ids.contains(file_stem) {
-                                    let _ = std::fs::remove_file(&path);
-                                }
-                            }
-                        }
+                        command_generation::remove_command_files(&dir_path);
+                        // Drop the directory too once it is empty, so a
+                        // skills-only setup leaves no stray command folder.
+                        let _ = std::fs::remove_dir(&dir_path);
                     }
                 }
             }

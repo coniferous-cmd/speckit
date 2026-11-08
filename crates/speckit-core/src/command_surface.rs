@@ -101,16 +101,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn claude_is_adapter_backed() {
+    fn claude_is_skills_invocable() {
+        // Claude Code gets skills only: skill and command bodies are identical,
+        // so emitting slash-command files would just duplicate them.
         assert_eq!(
             resolve_command_surface_capability("claude"),
-            CommandSurfaceCapability::AdapterBacked
+            CommandSurfaceCapability::SkillsInvocable
         );
     }
 
     #[test]
-    fn every_registered_adapter_is_adapter_backed() {
+    fn adapter_backed_tools_are_adapter_backed() {
         for adapter in crate::command_generation::CommandAdapterRegistry::global().get_all() {
+            if crate::command_generation::is_skills_only_tool(adapter.tool_id()) {
+                continue;
+            }
             assert_eq!(
                 resolve_command_surface_capability(adapter.tool_id()),
                 CommandSurfaceCapability::AdapterBacked
@@ -136,9 +141,13 @@ mod tests {
 
     #[test]
     fn resolve_command_invocation_for_adapter_backed() {
-        let inv = resolve_command_invocation("claude").unwrap();
+        let inv = resolve_command_invocation("qwen").unwrap();
         assert_eq!(inv.prefix, "specx");
-        assert_eq!(inv.separator, ":");
+    }
+
+    #[test]
+    fn resolve_command_invocation_none_for_skills_only_tool() {
+        assert!(resolve_command_invocation("claude").is_none());
     }
 
     #[test]
@@ -157,11 +166,12 @@ mod tests {
     #[test]
     fn should_generate_skills_commands_delivery() {
         // With Commands delivery, only SkillsInvocable tools get skills
-        assert!(!should_generate_skills_for_tool(
+        assert!(should_generate_skills_for_tool(
             "claude",
             Delivery::Commands
         ));
         assert!(should_generate_skills_for_tool("codex", Delivery::Commands));
+        assert!(!should_generate_skills_for_tool("qwen", Delivery::Commands));
         assert!(!should_generate_skills_for_tool(
             "unknown",
             Delivery::Commands
@@ -170,8 +180,10 @@ mod tests {
 
     #[test]
     fn should_generate_commands_default_delivery() {
-        // With Both delivery, adapter-backed tools get commands
-        assert!(should_generate_commands_for_tool("claude", Delivery::Both));
+        // With Both delivery, adapter-backed tools get commands — except
+        // skills-only tools, which never emit command files.
+        assert!(!should_generate_commands_for_tool("claude", Delivery::Both));
+        assert!(should_generate_commands_for_tool("qwen", Delivery::Both));
         assert!(!should_generate_commands_for_tool("codex", Delivery::Both));
         assert!(!should_generate_commands_for_tool(
             "unknown",
@@ -190,15 +202,27 @@ mod tests {
 
     #[test]
     fn should_remove_skills_commands_delivery_adapter() {
-        assert!(should_remove_skills_for_tool("claude", Delivery::Commands));
+        assert!(should_remove_skills_for_tool("qwen", Delivery::Commands));
         assert!(!should_remove_skills_for_tool("codex", Delivery::Commands));
+        // Skills-only tools always receive skills, even with commands delivery.
+        assert!(!should_remove_skills_for_tool("claude", Delivery::Commands));
     }
 
     #[test]
     fn should_reconcile_command_files_skills_delivery() {
+        // Skills-only tools keep a command adapter path purely so stale files
+        // can be cleaned up.
+        assert!(should_reconcile_command_files_for_tool(
+            "claude",
+            Delivery::Both
+        ));
         assert!(should_reconcile_command_files_for_tool(
             "claude",
             Delivery::Skills
+        ));
+        assert!(!should_reconcile_command_files_for_tool(
+            "qwen",
+            Delivery::Both
         ));
         assert!(!should_reconcile_command_files_for_tool(
             "codex",

@@ -444,6 +444,53 @@ fn init_and_update_generate_implement_surfaces_for_each_delivery_mode() {
 }
 
 #[test]
+fn claude_gets_skills_without_slash_commands_in_both_delivery() {
+    let (_temp, project, _nested, config_home, data_home) = fixture();
+    let global_dir = config_home.join("speckit");
+    std::fs::create_dir_all(&global_dir).unwrap();
+    std::fs::write(global_dir.join("config.json"), r#"{"delivery":"both"}"#).unwrap();
+
+    // Simulate a previous setup that still left slash-command files behind.
+    let stale_dir = project.join(".claude").join("commands").join("specx");
+    std::fs::create_dir_all(&stale_dir).unwrap();
+    std::fs::write(stale_dir.join("implement.md"), "stale").unwrap();
+
+    let init = run_cli(
+        &project,
+        &config_home,
+        &data_home,
+        &["init", ".", "--tools", "claude", "--force"],
+    );
+    assert!(
+        init.status.success(),
+        "claude init failed: {}",
+        String::from_utf8_lossy(&init.stderr)
+    );
+
+    // Skills carry the workflow; no slash-command surface is created.
+    assert!(
+        project
+            .join(".claude/skills/speckit-implement-change/SKILL.md")
+            .is_file()
+    );
+    assert!(!project.join(".claude/commands/specx").exists());
+
+    // `update` must not resurrect the command surface either.
+    let update = run_cli(
+        &project,
+        &config_home,
+        &data_home,
+        &["update", ".", "--force"],
+    );
+    assert!(
+        update.status.success(),
+        "claude update failed: {}",
+        String::from_utf8_lossy(&update.stderr)
+    );
+    assert!(!project.join(".claude/commands/specx").exists());
+}
+
+#[test]
 fn change_commands_report_json_errors_without_using_user_configuration() {
     let (_temp, project, _nested, config_home, data_home) = fixture();
 

@@ -501,7 +501,8 @@ impl InitCommand {
                 }
             }
 
-            // Reconcile: remove stale command files when delivery is skills-only
+            // Reconcile: remove command files for tools that no longer emit
+            // commands (skills delivery, or a skills-only tool such as Claude).
             if command_generation::should_reconcile_command_files_for_tool(&tool.value, delivery) {
                 if let Some(adapter) = CommandAdapterRegistry::global().get(&tool.value) {
                     let command_dir_name = adapter
@@ -511,23 +512,11 @@ impl InitCommand {
                     if let Some(dir) = command_dir_name {
                         let dir_path = project_path.join(&dir);
                         if dir_path.exists() {
-                            // Remove command files that are no longer in the workflow set
-                            let active_ids: HashSet<&str> =
-                                command_contents.iter().map(|c| c.id.as_str()).collect();
-                            if let Ok(rd) = fs::read_dir(&dir_path) {
-                                for entry in rd.flatten() {
-                                    let path = entry.path();
-                                    if !path.is_file() {
-                                        continue;
-                                    }
-                                    let file_stem =
-                                        path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-                                    if !active_ids.contains(file_stem) {
-                                        let _ = fs::remove_file(&path);
-                                        results.removed_command_count += 1;
-                                    }
-                                }
-                            }
+                            let removal = command_generation::remove_command_files(&dir_path);
+                            results.removed_command_count += removal;
+                            // Drop the directory too once it is empty, so a
+                            // skills-only setup leaves no stray command folder.
+                            let _ = fs::remove_dir(&dir_path);
                         }
                     }
                 }
@@ -653,6 +642,21 @@ impl InitCommand {
                 .map(|t| t.name.as_str())
                 .collect();
             println!("Refreshed: {}", names.join(", "));
+        }
+
+        if !results.skills_invocable_command_skips.is_empty() {
+            let names: Vec<&str> = results
+                .skills_invocable_command_skips
+                .iter()
+                .map(|value| {
+                    AI_TOOLS
+                        .iter()
+                        .find(|t| &t.value == value)
+                        .map(|t| t.name.as_str())
+                        .unwrap_or(value.as_str())
+                })
+                .collect();
+            println!("Skills only (no slash commands): {}", names.join(", "));
         }
 
         if !results.failed_tools.is_empty() {
