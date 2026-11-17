@@ -40,6 +40,13 @@ pub struct ImplementInstructions {
     pub change_dir: String,
     pub schema_name: String,
     pub context_files: std::collections::HashMap<String, Vec<String>>,
+    #[serde(rename = "useWorktree", skip_serializing_if = "Option::is_none")]
+    pub use_worktree: Option<bool>,
+    #[serde(
+        rename = "workspaceInstruction",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub workspace_instruction: Option<String>,
     pub progress: ImplementProgress,
     pub tasks: Vec<TaskItem>,
     pub state: String,

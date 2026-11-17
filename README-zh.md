@@ -104,7 +104,7 @@ Speckit 可为 **38 种 AI 工具**生成专属的技能文件和斜杠命令，
 
 ## 配置
 
-**项目级**：`speckit/config.yaml`（位于 `.speckit` 目录内）
+**项目级**：`speckit/config.yaml`（也支持 `speckit/config.yml`，`.yaml` 优先）
 
 **全局**：`~/.config/speckit/config.json`（配置档案、交付方式和功能开关）
 
@@ -113,6 +113,23 @@ speckit config list              # 显示全部配置
 speckit config get <key>         # 获取一个值
 speckit config set <key> <value> # 设置一个值
 ```
+
+### 在 Git worktree 中实施
+
+在所选项目的配置文件中启用工作区指引（不是全局配置）：
+
+```yaml
+schema: spec-driven
+use-worktree: true
+```
+
+运行 `speckit instructions implement --change <name> --json`，或调用生成的 implement-change skill。仅当 `use-worktree: true` 且状态为 `ready` 时，JSON 才包含 `useWorktree: true` 和独立的 `workspaceInstruction`，文本输出也显示对应指引。配置为 false、缺省，或状态为 `blocked` / `all_done` 时，两个字段和额外文本区域均省略；schema 原有 instruction 保持不变。已有的生成 skill 可通过 `speckit update` 刷新。
+
+指引要求 agent **为每个 change 创建或验证复用一个独立 worktree**，报告目录和分支，并将代码编辑、构建和测试指向该目录。本地规划文件路径与任务勾选也指向目标 worktree；显式选定的外部 store 则保留 `--store <id>` 作用域和原规划路径，agent 必须先确认其对应的代码仓库。
+
+必要规划输入必须在目标工作区中存在且保持最新。若未提交的规划内容不可用或已过期，agent 应暂停并请你先提交，不自动复制或提交。仓库或工作区归属不明确、准备失败时也应暂停，不回退到原目录实施。完成后保留分支和 worktree 供审查，不自动合并或清理。
+
+这是 **agent 行为约定，而非 CLI 强制隔离**：查询实施指引不会创建分支或 worktree，也不会执行修改 Git 状态的操作。
 
 ## 存储库
 
