@@ -12,6 +12,48 @@ const MIN_WIDTH: usize = 60;
 /// Width of the ASCII art column (with padding).
 const ART_COLUMN_WIDTH: usize = 24;
 
+/// Visible cell width of a string, ignoring ANSI escape sequences.
+///
+/// `colored` wraps every line in escape codes, so `chars().count()` would count
+/// the markup as if it were printed text.
+fn visible_width(text: &str) -> usize {
+    let mut width = 0;
+    let mut chars = text.chars();
+
+    while let Some(c) = chars.next() {
+        if c != '\x1b' {
+            width += 1;
+            continue;
+        }
+
+        // CSI sequence: ESC [ parameter bytes ... final byte in @..~
+        if chars.next() == Some('[') {
+            for byte in chars.by_ref() {
+                if ('@'..='~').contains(&byte) {
+                    break;
+                }
+            }
+        }
+    }
+
+    width
+}
+
+/// Widest row the side-by-side layout can produce, in terminal cells.
+///
+/// A row that exceeds the terminal width wraps onto a second line, and wrapped
+/// rows are invisible to cursor-up arithmetic — the animation would drift down
+/// the screen exactly as it does when the row count is simply wrong.
+fn required_width(text_lines: &[String]) -> usize {
+    let text_width = text_lines
+        .iter()
+        .map(|line| visible_width(line))
+        .max()
+        .unwrap_or(0);
+
+    ART_COLUMN_WIDTH + text_width
+}
+
 /// Builds the welcome text content (right column).
 fn get_welcome_text(workflows: &[String]) -> Vec<String> {
     let mut lines: Vec<String> = Vec::new();
@@ -65,6 +107,18 @@ fn render_frame(art_lines: &[String], text_lines: &[String]) -> String {
     lines.join("\n")
 }
 
+/// Rows a frame occupies on screen, measured from the frame it actually renders.
+///
+/// [`render_frame`] joins its lines without a trailing newline and callers append
+/// `"\n\n"`, so one frame leaves the cursor exactly this many rows below its top.
+/// Every overwrite and every clear must move by this value: counting rows some
+/// other way drifts, and a drift the height of the frame per redraw looks like the
+/// welcome screen reprinting itself forever.
+fn frame_rows(art_lines: &[String], text_lines: &[String]) -> usize {
+    // The joined lines, plus the blank row that follows them.
+    render_frame(art_lines, text_lines).lines().count() + 1
+}
+
 /// Best-effort check of the OS-level reduced-motion preference.
 ///
 /// Any detection failure means "no preference detected" and animation stays enabled.
@@ -98,7 +152,7 @@ pub fn prefers_reduced_motion() -> bool {
 }
 
 /// Checks if the terminal supports animation.
-fn can_animate() -> bool {
+fn can_animate(text_lines: &[String]) -> bool {
     // Must be TTY.
     if !io::stdout().is_terminal() {
         return false;
@@ -114,9 +168,9 @@ fn can_animate() -> bool {
         return false;
     }
 
-    // Check terminal width.
+    // Check terminal width: the layout floor, and enough room that no row wraps.
     let columns = terminal_size().unwrap_or(80);
-    if columns < MIN_WIDTH {
+    if columns < MIN_WIDTH || columns < required_width(text_lines) {
         return false;
     }
 
@@ -167,12 +221,12 @@ unsafe extern "C" {
     fn libc_ioctl(fd: i32, request: u64, ...) -> i32;
 }
 
-/// Wait for Enter key press from stdin.
+/// Blocks until the user presses Enter.
+///
+/// Writes nothing on purpose: in the animated branch this thread shares the
+/// terminal with the redraw loop, and one stray newline desynchronises the row
+/// counting the animation relies on. Callers that need a blank line own it.
 fn wait_for_enter() -> io::Result<()> {
-    let mut stdout = io::stdout();
-    writeln!(stdout)?;
-    stdout.flush()?;
-
     let mut input = String::new();
     io::stdin().read_line(&mut input)?;
     Ok(())
@@ -185,7 +239,7 @@ pub fn show_welcome_screen(workflows: &[String], animate: Option<bool>) -> io::R
     let text_lines = get_welcome_text(workflows);
     let animation = welcome_animation();
 
-    if animate == Some(false) || !can_animate() {
+    if animate == Some(false) || !can_animate(&text_lines) {
         // Static fallback.
         let frame = &animation.frames[3]; // Peak frame.
         let rendered = render_frame(frame, &text_lines);
@@ -205,10 +259,11 @@ pub fn show_welcome_screen(workflows: &[String], animate: Option<bool>) -> io::R
     writeln!(stdout)?;
     stdout.flush()?;
 
-    let frame_height = animation.frames[0].len().max(text_lines.len());
-    let total_height = frame_height + 3; // internal newlines + trailing.
     let num_frames = animation.frames.len();
     let interval = Duration::from_millis(animation.interval_ms);
+    // Every frame renders at the same height, so the block to erase is known up
+    // front — the redraw thread takes `animation` and `text_lines` with it.
+    let rows = frame_rows(&animation.frames[0], &text_lines);
 
     // Animation loop.
     let running = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
@@ -216,21 +271,22 @@ pub fn show_welcome_screen(workflows: &[String], animate: Option<bool>) -> io::R
 
     let handle = thread::spawn(move || {
         let mut frame_index = 0;
-        let mut is_first = true;
+        // Rows covered by the frame currently on screen; 0 until one is drawn.
+        let mut previous_rows = 0;
 
         while running_clone.load(std::sync::atomic::Ordering::Relaxed) {
             let frame = &animation.frames[frame_index];
-
-            if !is_first {
-                // Move cursor up to overwrite previous frame.
-                print!("\x1b[{frame_height}A");
-            }
-            is_first = false;
-
             let rendered = render_frame(frame, &text_lines);
+
+            // Return to the top of the frame on screen before redrawing it.
+            if previous_rows > 0 {
+                print!("\x1b[{previous_rows}A");
+            }
+
             print!("{rendered}\n\n");
             io::stdout().flush().ok();
 
+            previous_rows = frame_rows(frame, &text_lines);
             frame_index = (frame_index + 1) % num_frames;
             thread::sleep(interval);
         }
@@ -243,12 +299,20 @@ pub fn show_welcome_screen(workflows: &[String], animate: Option<bool>) -> io::R
     running.store(false, std::sync::atomic::Ordering::Relaxed);
     handle.join().ok();
 
-    // Clear the welcome screen.
-    for _ in 0..total_height {
-        println!("\x1b[2K");
+    // Clear the welcome screen. The cursor sits `rows` below the top of the frame
+    // just drawn, plus one more row echoed by the terminal for the Enter keypress,
+    // so climb back to that top, erase downward, then return to it and let the next
+    // prompt print over the cleared block. A frame drawn while this thread was
+    // still blocked in `read_line` lands one row off and can leave a trace; cleanup
+    // here is best-effort, the flood of repaints above is not.
+    let mut clear = String::new();
+    clear.push_str(&format!("\x1b[{}A", rows + 1));
+    for _ in 0..rows {
+        clear.push_str("\x1b[2K\x1b[1B");
     }
-    print!("\x1b[{total_height}A");
-    io::stdout().flush()?;
+    clear.push_str(&format!("\x1b[{rows}A\r"));
+    write!(stdout, "{clear}")?;
+    stdout.flush()?;
 
     Ok(())
 }
@@ -312,6 +376,45 @@ mod tests {
         assert!(!anim.frames.is_empty());
         for frame in &anim.frames {
             assert!(!frame.is_empty());
+        }
+    }
+
+    /// The redraw loop moves the cursor up by [`frame_rows`] between frames, and
+    /// writes each frame as `render_frame(..)` plus `"\n\n"`. Any mismatch is a
+    /// one-row-per-frame drift, which reads as the welcome screen reprinting
+    /// itself down the terminal forever.
+    #[test]
+    fn frame_rows_counts_every_row_a_frame_touches() {
+        let anim = welcome_animation();
+
+        let empty: [String; 0] = [];
+        let with_one = ["explore".to_string()];
+
+        for workflows in [&empty[..], &with_one[..]] {
+            let text = get_welcome_text(workflows);
+
+            for frame in &anim.frames {
+                let written = render_frame(frame, &text).matches('\n').count() + 2;
+                assert_eq!(frame_rows(frame, &text), written);
+            }
+        }
+    }
+
+    #[test]
+    fn visible_width_ignores_ansi_escapes() {
+        assert_eq!(visible_width("plain"), 5);
+        assert_eq!(visible_width("\x1b[38;5;51mcolored\x1b[0m"), 7);
+        assert_eq!(visible_width("\x1b[1m\x1b[37mbold\x1b[0m"), 4);
+    }
+
+    #[test]
+    fn required_width_covers_the_longest_row() {
+        let workflows = vec!["explore".to_string(), "implement".to_string()];
+        let text = get_welcome_text(&workflows);
+        let required = required_width(&text);
+
+        for line in &text {
+            assert!(ART_COLUMN_WIDTH + visible_width(line) <= required);
         }
     }
 }
