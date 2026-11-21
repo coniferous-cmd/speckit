@@ -1,10 +1,13 @@
+# Spec Delta
+
+## Purpose
+<!-- New capabilities only: one or two sentences (50+ characters) on what this capability is for. Delete this section for an existing capability. -->
+
 ## ADDED Requirements
 
-### Requirement: [Requirement name]
+### Requirement: <!-- requirement name -->
+<!-- requirement text -->
 
-The system SHALL [describe the requirement].
-
-#### Scenario: [Scenario name]
-
-- **WHEN** [event]
-- **THEN** [expected outcome]
+#### Scenario: <!-- scenario name -->
+- **WHEN** <!-- condition -->
+- **THEN** <!-- expected outcome -->
