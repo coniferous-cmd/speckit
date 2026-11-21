@@ -2,6 +2,8 @@ Implement tasks from a Speckit change.
 
 **Store selection:** If the user names a store (a store is a standalone Speckit repo registered on this machine) or the work lives in one, run `speckit store list --json` to discover registered store ids, then pass `--store <id>` on the commands that read or write specs and changes (`new change`, `status`, `instructions`, `list`, `show`, `validate`, `archive`, `doctor`, `context`, `schemas`, `view`). Once selected, treat `--store <id>` as sticky for the rest of the workflow. Every unscoped example of those commands below is shorthand: before running it, append the flag. For example, run `speckit status --change "<name>" --json --store "<id>"`, not the unscoped form shown below. Other commands do not take the flag. Hints printed by commands already carry the flag; keep it on follow-ups. Without a store, commands act on the nearest local `speckit/` root.
 
+**Project check:** Verify the planning root with `speckit status --json` before editing files. If status lists available changes and asks for a change name, proceed with change selection. If the project declares a store that cannot be resolved, show the error and stop. If no Speckit root exists and you selected this workflow yourself, continue with the user's request normally. If the user explicitly requested Speckit, ask whether to initialize this project, use an existing store, or continue without Speckit. Never initialize a project as a side effect.
+
 **Input**: Optionally specify a change name. If omitted, check if it can be inferred from conversation context. If vague or ambiguous you MUST prompt for available changes.
 
 **Steps**
@@ -13,15 +15,16 @@ Implement tasks from a Speckit change.
    - Auto-select if only one active change exists
    - If ambiguous, run `speckit list --json` to get available changes and ask the user to select one
 
-   Always announce: "Using change: <name>" and how to override (e.g., `/speckit:implement <other>`).
+   Always announce: "Using change: <name>". To select a different change, rerun this workflow with its name.
 
 2. **Check status to understand the schema**
    ```bash
    speckit status --change "<name>" --json
    ```
    Parse the JSON to understand:
-   - `schemaName`: The workflow being used (e.g., "spec-driven")
-   - `planningHome`, `changeRoot`, and `actionContext`: planning scope and edit constraints
+   - `schema_name`: The workflow being used (e.g., "spec-driven")
+   - `planningHome` and `change_root`: the planning root and change directory
+   - `actionContext.allowedEditRoots` and `actionContext.constraints`: where planning and code edits go. If a store is selected and no implementation repository can be determined, ask the user which repository to edit before changing code.
    - Which artifact contains the tasks (typically "tasks" for spec-driven, check status for others)
 
 3. **Get implement instructions**
@@ -31,26 +34,28 @@ Implement tasks from a Speckit change.
    ```
 
    This returns:
-   - `contextFiles`: artifact ID -> array of concrete file paths (varies by schema - could be proposal/specs/design/tasks or spec/tests/implementation/docs)
+   - `context_files`: artifact ID -> array of concrete file paths (varies by schema - could be proposal/specs/design/tasks or spec/tests/implementation/docs)
    - Progress (total, complete, remaining)
-   - Task list with status
+   - Task list with status, `sourcePath`, and one-based `line`
+   - `taskTrackingConfigured`: whether the schema uses a task checklist
    - Dynamic instruction based on current state
    - Optional `context`: current required project instruction input from the selected root
-   - Optional `operationGuidance`: current advisory guidance for implement
+   - Optional `operation_guidance`: current advisory guidance for implement
+   - Optional `missing_artifacts`, `missingPrerequisites`, `warnings`, and `unavailableTrackingFiles`
 
    **Handle states:**
-   - If `state: "blocked"` (missing artifacts): show message, suggest using `/speckit:continue` (if it is not installed, run `speckit status --change "<name>" --json` to see the next artifact and `speckit instructions <artifact-id> --change "<name>" --json` for how to create it)
-   - If `state: "all_done"`: congratulate, suggest archive
+   - If `state: "blocked"`: show the CLI message and pause implementation. If artifacts are missing, show the missing artifacts and recovery step from `instruction`. Otherwise follow the CLI guidance to repair the configured tracking files from the existing planning artifacts. Keep the selected store on follow-up commands.
+   - If `state: "all_done"`: report that tracked tasks are complete and suggest review or verification as appropriate before archiving
    - Otherwise: proceed to implementation
 
    Treat `context` as a required prompt-level input. Read and consider it, and
    apply relevant project facts, conventions, and constraints while implementing.
-   Treat `operationGuidance` as optional additive advice. Read and consider every
+   Treat `operation_guidance` as optional additive advice. Read and consider every
    entry, and follow entries that are applicable and compatible with the built-in
    workflow.
 
    Keep both fields separate from CLI-returned state, missing artifacts, tasks,
-   progress, `contextFiles`, and the built-in `instruction`. They are not
+   progress, `context_files`, and the built-in `instruction`. They are not
    evidence of task completion, do not replace the built-in instruction, and do
    not permit bypassing a blocked state. If context conflicts with the built-in
    instruction, an explicit user choice, or a CLI-controlled value, report the
@@ -60,12 +65,12 @@ Implement tasks from a Speckit change.
 
 4. **Read context files**
 
-   Read every file path listed under `contextFiles` from the implement instructions output.
+   Read every file path listed under `context_files` from the implement instructions output.
    The files depend on the schema being used:
    - **spec-driven**: proposal, specs, design, tasks
-   - Other schemas: follow the contextFiles from CLI output
+   - Other schemas: follow the `context_files` from CLI output
 
-   Do not copy `context` or `operationGuidance` verbatim into implementation
+   Do not copy `context` or `operation_guidance` verbatim into implementation
    files or planning artifacts unless the user separately asks for that content.
 
 5. **Show current progress**
@@ -75,14 +80,16 @@ Implement tasks from a Speckit change.
    - Progress: "N/M tasks complete"
    - Remaining tasks overview
    - Dynamic instruction from CLI
+   - CLI warnings and any tracking files that could not be read
 
 6. **Implement tasks (loop until done or blocked)**
 
-   For each pending task:
+   If `taskTrackingConfigured` is false, implement from the planning artifacts and verify the result. Otherwise, for each pending task:
    - Show which task is being worked on
    - Make the code changes required
    - Keep changes minimal and focused
-   - Mark task complete in the tasks file: `- [ ]` → `- [x]`
+   - Before editing the checkbox, confirm the task at its `sourcePath` and `line` still matches the description. If it moved or changed, rerun the implement instructions and use the refreshed location.
+   - Mark that exact checkbox complete, then rerun the implement instructions and confirm the task is done and progress changed.
    - Continue to next task
 
    **Pause if:**
@@ -97,7 +104,7 @@ Implement tasks from a Speckit change.
    Display:
    - Tasks completed this session
    - Overall progress: "N/M tasks complete"
-   - If all done: suggest archive
+   - If all tracked tasks are done: suggest review or verification before archive
    - If paused: explain why and wait for guidance
 
 **Output During Implementation**
@@ -128,7 +135,7 @@ Working on task 4/7: <task description>
 - [x] Task 2
 ...
 
-All tasks complete! You can archive this change with `/speckit:archive`.
+All tracked tasks are complete. Review or verify the change, then ask to archive it.
 ```
 
 **Output On Pause (Issue Encountered)**
@@ -161,7 +168,7 @@ What would you like to do?
 - Pause on errors, blockers, or unclear requirements - don't guess
 - When a task needs work beyond what the spec describes, surface the added scope and pause - never silently narrow, defer, or simplify away specified behavior
 - Only mark a task `- [x]` when its specified behavior is fully implemented, not when it is partially done or deferred
-- Use contextFiles from CLI output, don't assume specific file names
+- Use `context_files` from CLI output. Update each checkbox at its reported `sourcePath` and `line`.
 - Do not use context or operation guidance as proof that a task is complete
 - Apply relevant project context; report conflicts with controlling workflow inputs
 - Consider every guidance entry; explain any inapplicable or conflicting advice

@@ -116,7 +116,7 @@ pub async fn new_change_command(
         return Err(e);
     }
 
-    let project_root = std::env::current_dir()?.to_string_lossy().to_string();
+    let project_root = super::resolve_project_root(options.store.as_deref()).await?;
 
     // Validate schema if provided
     if let Some(ref schema) = options.schema {

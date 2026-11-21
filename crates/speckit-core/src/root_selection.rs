@@ -521,6 +521,16 @@ pub fn is_store_selected_root(root: &ResolvedSpeckitRoot) -> bool {
     root.store_id.is_some()
 }
 
+/// Finds the code project on the current path that declares the selected store.
+pub fn find_declaring_project_root(store_id: &str, start_path: &Path) -> Option<PathBuf> {
+    let nearest = find_qualifying_root_sync(&canonical_directory(start_path))?;
+    let classification = classify_speckit_dir(&nearest);
+    (!classification.has_planning_shape
+        && classification.pointer.malformed.is_none()
+        && classification.pointer.value.as_deref() == Some(store_id))
+    .then_some(nearest)
+}
+
 /// Emits a human-readable banner to stderr when a store root was selected.
 pub fn emit_store_root_banner(root: &ResolvedSpeckitRoot) {
     if let Some(ref store_id) = root.store_id {

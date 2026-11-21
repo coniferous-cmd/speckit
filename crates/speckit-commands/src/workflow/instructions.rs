@@ -10,8 +10,8 @@ use serde::{Deserialize, Serialize};
 use speckit_core::project_config::{ProjectConfig, load_operation_inputs, validate_config_rules};
 
 use super::shared::{
-    ArchiveInstructions, ImplementInstructions, ImplementProgress, TaskItem, print_json,
-    validate_change_exists,
+    ArchiveInstructions, ImplementInstructions, ImplementProgress, TaskItem,
+    UnavailableTrackingFile, print_json, validate_change_exists,
 };
 use crate::shared_gather::{
     ReferenceIndexEntry, assemble_reference_index, read_project_config, read_registry_snapshot,
@@ -20,6 +20,10 @@ use speckit_core::artifact_graph::{
     ChangeContext, LoadChangeContextOptions, generate_instructions as generate_core_instructions,
     load_change_context, resolve_artifact_outputs,
 };
+use speckit_core::change_metadata::METADATA_FILENAME;
+use speckit_core::root_selection::{ResolvedSpeckitRoot, to_root_output, with_store_flag};
+use speckit_core::utils::spec_discovery::find_misplaced_delta_specs;
+use speckit_core::utils::task_progress::parse_task_lines;
 
 // -----------------------------------------------------------------------------
 // Types
@@ -426,24 +430,27 @@ fn print_instructions_text(instructions: &ArtifactInstructions) {
 pub async fn implement_instructions_command(
     options: ImplementInstructionsOptions,
 ) -> anyhow::Result<()> {
-    let project_root = super::resolve_project_root(options.store.as_deref()).await?;
+    let root = crate::change::resolve_command_root(options.store.as_deref(), false)?;
+    let project_root = root.path.to_string_lossy();
+    let new_change_hint = with_store_flag(&root, "speckit new change <name>");
 
     reject_removed_operation_guidance(&project_root)?;
 
     let change_name = validate_change_exists(
         options.change.as_deref(),
         &project_root,
-        None,
-        Some("speckit new change <name>"),
+        Some(&root.changes_dir.to_string_lossy()),
+        Some(&new_change_hint),
     )
     .await?;
 
     let instructions =
-        generate_implement_instructions(&project_root, &change_name, options.schema.as_deref())
-            .await?;
+        generate_implement_instructions(&root, &change_name, options.schema.as_deref()).await?;
 
     if options.json {
-        print_json(&instructions);
+        let mut payload = serde_json::to_value(&instructions)?;
+        payload["root"] = serde_json::to_value(to_root_output(&root))?;
+        print_json(&payload);
         return Ok(());
     }
 
@@ -474,17 +481,15 @@ fn reject_removed_operation_guidance(project_root: &str) -> anyhow::Result<()> {
 
 /// Generate implement instructions for implementing tasks from a change.
 pub async fn generate_implement_instructions(
-    project_root: &str,
+    root: &ResolvedSpeckitRoot,
     change_name: &str,
     schema_name: Option<&str>,
 ) -> anyhow::Result<ImplementInstructions> {
-    let change_dir = Path::new(project_root)
-        .join("speckit")
-        .join("changes")
-        .join(change_name);
+    let change_dir = root.changes_dir.join(change_name);
+    let project_root = root.path.to_string_lossy();
 
     let change_context = load_change_context(
-        Path::new(project_root),
+        &root.path,
         change_name,
         schema_name,
         LoadChangeContextOptions {
@@ -492,43 +497,49 @@ pub async fn generate_implement_instructions(
         },
     )
     .map_err(|error| anyhow::anyhow!("Unable to load change context: {error}"))?;
-    let schema = change_context.schema_name.as_str();
-    let implement_phase = change_context.graph.schema().implement.as_ref();
-    let tracking_file = implement_phase
-        .and_then(|phase| phase.tracks.as_deref())
-        .unwrap_or("tasks.md");
-    let tasks_path = change_dir.join(tracking_file);
-    let required_artifacts = implement_phase
-        .map(|phase| phase.requires.clone())
+    let schema = change_context.graph.schema();
+    let implement_phase = schema.implement.as_ref();
+    let tracking = implement_phase.and_then(|phase| phase.tracks.as_deref());
+    let tracking_files = tracking
+        .map(|pattern| resolve_artifact_outputs(&change_dir, pattern))
         .unwrap_or_default();
+    let required_artifacts = schema.implement_requires();
     let missing_artifacts: Vec<String> = required_artifacts
-        .into_iter()
-        .filter(|artifact_id| !change_context.completed.contains(artifact_id))
+        .iter()
+        .filter(|artifact_id| !change_context.completed.contains(*artifact_id))
+        .cloned()
         .collect();
+    let missing_prerequisites = collect_missing_prerequisites(&change_context, &required_artifacts);
 
-    // Parse tasks
-    let (tasks, total, complete, remaining) = if tasks_path.exists() {
-        let content = tokio::fs::read_to_string(&tasks_path)
-            .await
-            .unwrap_or_default();
-        let parsed = parse_task_lines(&content);
-        let total = parsed.len();
-        let complete = parsed.iter().filter(|t| t.1).count();
-        let remaining = total - complete;
-        let task_items: Vec<TaskItem> = parsed
-            .into_iter()
-            .filter(|(_, _, desc)| !desc.is_empty())
-            .enumerate()
-            .map(|(i, (_, done, desc))| TaskItem {
-                id: format!("{}", i + 1),
-                description: desc,
-                done,
-            })
-            .collect();
-        (task_items, total, complete, remaining)
-    } else {
-        (Vec::new(), 0, 0, 0)
-    };
+    let mut tasks = Vec::new();
+    let mut total = 0;
+    let mut complete = 0;
+    let mut unavailable_tracking_files = Vec::new();
+    for file in &tracking_files {
+        let source_path = file.to_string_lossy().replace('\\', "/");
+        match tokio::fs::read_to_string(file).await {
+            Ok(content) => {
+                for task in parse_task_lines(&content) {
+                    total += 1;
+                    complete += usize::from(task.done);
+                    if !task.description.is_empty() {
+                        tasks.push(TaskItem {
+                            id: (tasks.len() + 1).to_string(),
+                            description: task.description,
+                            done: task.done,
+                            source_path: source_path.clone(),
+                            line: task.line,
+                        });
+                    }
+                }
+            }
+            Err(error) => unavailable_tracking_files.push(UnavailableTrackingFile {
+                path: source_path,
+                reason: error.to_string(),
+            }),
+        }
+    }
+    let remaining = total - complete;
 
     // Build context files from every artifact in the active schema.
     let mut context_files: HashMap<String, Vec<String>> = HashMap::new();
@@ -543,47 +554,91 @@ pub async fn generate_implement_instructions(
     }
 
     // Determine state
-    let (state, instruction) = if !missing_artifacts.is_empty() {
-        (
-            "blocked".to_string(),
-            format!(
-                "Create the required artifacts before implementing this change: {}.",
-                missing_artifacts.join(", ")
-            ),
+    let remedy = |artifact: &str| {
+        let instructions = with_store_flag(
+            root,
+            &format!("speckit instructions {artifact} --change {change_name}"),
+        );
+        let status = with_store_flag(root, &format!("speckit status --change {change_name}"));
+        format!(
+            "Use `{instructions}` to create or repair the artifact. `{status}` shows what's left."
         )
-    } else if !tasks_path.exists() {
+    };
+    let (state, mut instruction) = if !missing_artifacts.is_empty() {
+        let mut message = format!(
+            "Cannot implement this change yet. Missing artifacts: {}.",
+            missing_artifacts.join(", ")
+        );
+        if missing_prerequisites.len() > missing_artifacts.len() {
+            message.push_str(&format!(
+                "\nNot created yet, in build order: {}. Build the ones this change needs and check the schema for conditional artifacts.",
+                missing_prerequisites.join(", ")
+            ));
+        }
+        let artifact = match missing_prerequisites.as_slice() {
+            [only] => only,
+            _ => "<artifact>",
+        };
+        ("blocked", format!("{message}\n{}", remedy(artifact)))
+    } else if let Some(tracking) = tracking
+        && tasks.is_empty()
+    {
+        if !unavailable_tracking_files.is_empty() {
+            (
+                "blocked",
+                "No readable task descriptions are available.".to_owned(),
+            )
+        } else {
+            let message = if tracking_files.is_empty() {
+                format!(
+                    "The tracking file or pattern {tracking} has no matching file. Create a tracking file before implementing."
+                )
+            } else {
+                format!(
+                    "The tracking file or pattern {tracking} contains no tasks to work on. Add tasks before implementing."
+                )
+            };
+            let recovery = schema.artifacts.iter().find(|artifact| artifact.generates == tracking)
+                .map(|artifact| remedy(&artifact.id))
+                .unwrap_or_else(|| format!("Use the existing planning artifacts to create or repair the tracking file at {tracking}."));
+            ("blocked", format!("{message}\n{recovery}"))
+        }
+    } else if tracking.is_some() && unavailable_tracking_files.is_empty() && remaining == 0 {
         (
-            "blocked".to_string(),
-            format!(
-                "The {tracking_file} file is missing and must be created.\nUse speckit-continue-change to generate the tracking file."
-            ),
-        )
-    } else if tasks.is_empty() {
-        (
-            "blocked".to_string(),
-            format!(
-                "The {tracking_file} file exists but contains no tasks to work on.\nAdd tasks to {tracking_file} or regenerate it with speckit-continue-change."
-            ),
-        )
-    } else if remaining == 0 && total > 0 {
-        (
-            "all_done".to_string(),
-            "All tasks are complete! This change is ready to be archived.\nConsider running tests and reviewing the changes before archiving.".to_string(),
+            "all_done",
+            "All tracked tasks are complete.\nReview or verify the change before archiving."
+                .to_owned(),
         )
     } else {
         (
-            "ready".to_string(),
+            "ready",
             implement_phase
-                .and_then(|phase| phase.instruction.clone())
-                .unwrap_or_else(|| "Read context files, work through pending tasks, mark complete as you go.\nPause if you hit blockers or need clarification.".to_string()),
+                .and_then(|phase| phase.instruction.as_deref())
+                .map(str::trim)
+                .unwrap_or(if tracking.is_some() {
+                    "Read context files, work through pending tasks, mark complete as you go.\nPause if you hit blockers or need clarification."
+                } else {
+                    "All required artifacts complete. Proceed with implementation."
+                })
+                .to_owned(),
         )
+    };
+    if !unavailable_tracking_files.is_empty() {
+        instruction.push_str("\nTask completion could not be verified for these tracking files:");
+        for file in &unavailable_tracking_files {
+            instruction.push_str(&format!("\n- {}: {}", file.path, file.reason));
+        }
+    }
+    let warnings = if state == "blocked" {
+        Vec::new()
+    } else {
+        implement_spec_warnings(&change_context, &context_files, root)?
     };
 
     // Load references
     let registry = read_registry_snapshot().await;
-    let project_config = read_project_config(project_root);
-    let core_project_config =
-        speckit_core::project_config::read_project_config(Path::new(project_root));
+    let project_config = read_project_config(&project_root);
+    let core_project_config = speckit_core::project_config::read_project_config(&root.path);
     let operation_inputs = load_operation_inputs(core_project_config.as_ref(), "implement");
     let references_decl = project_config
         .as_ref()
@@ -592,14 +647,15 @@ pub async fn generate_implement_instructions(
     let references = if references_decl.is_empty() {
         None
     } else {
-        let idx = assemble_reference_index(&references_decl, &registry.entries, project_root).await;
+        let idx =
+            assemble_reference_index(&references_decl, &registry.entries, &project_root).await;
         if idx.is_empty() { None } else { Some(idx) }
     };
 
     Ok(ImplementInstructions {
         change_name: change_name.to_string(),
         change_dir: change_dir.to_string_lossy().replace('\\', "/"),
-        schema_name: schema.to_string(),
+        schema_name: change_context.schema_name,
         context_files,
         progress: ImplementProgress {
             total,
@@ -607,12 +663,16 @@ pub async fn generate_implement_instructions(
             remaining,
         },
         tasks,
-        state,
+        task_tracking_configured: tracking.is_some(),
+        unavailable_tracking_files,
+        state: state.to_owned(),
         missing_artifacts: if missing_artifacts.is_empty() {
             None
         } else {
             Some(missing_artifacts)
         },
+        missing_prerequisites,
+        warnings,
         instruction,
         references,
         context: operation_inputs.context,
@@ -620,20 +680,84 @@ pub async fn generate_implement_instructions(
     })
 }
 
-/// Parse task lines from a tasks.md file content.
-fn parse_task_lines(content: &str) -> Vec<(usize, bool, String)> {
-    let mut tasks = Vec::new();
-    for (line_no, line) in content.lines().enumerate() {
-        let trimmed = line.trim();
-        if let Some(rest) = trimmed.strip_prefix("- [") {
-            if rest.len() > 2 && rest.as_bytes()[1] == b']' {
-                let done = rest.as_bytes()[0] == b'x' || rest.as_bytes()[0] == b'X';
-                let desc = rest[2..].trim().to_string();
-                tasks.push((line_no, done, desc));
-            }
+fn collect_missing_prerequisites(context: &ChangeContext, required: &[String]) -> Vec<String> {
+    let mut pending: Vec<&str> = required.iter().map(String::as_str).collect();
+    let mut visited = HashSet::new();
+    while let Some(id) = pending.pop() {
+        if visited.insert(id)
+            && let Some(artifact) = context.graph.get_artifact(id)
+        {
+            pending.extend(artifact.requires.iter().map(String::as_str));
         }
     }
-    tasks
+    context
+        .graph
+        .get_build_order()
+        .into_iter()
+        .filter(|id| visited.contains(id.as_str()) && !context.completed.contains(id))
+        .collect()
+}
+
+fn implement_spec_warnings(
+    context: &ChangeContext,
+    context_files: &HashMap<String, Vec<String>>,
+    root: &ResolvedSpeckitRoot,
+) -> anyhow::Result<Vec<String>> {
+    let spec_artifacts = context
+        .graph
+        .schema()
+        .artifacts
+        .iter()
+        .filter(|artifact| {
+            artifact
+                .generates
+                .trim_start_matches("./")
+                .starts_with("specs/")
+        })
+        .collect::<Vec<_>>();
+    if spec_artifacts.is_empty()
+        || context.skipped_artifacts.as_ref().is_some_and(|skipped| {
+            spec_artifacts
+                .iter()
+                .any(|artifact| skipped.contains(&artifact.id))
+        })
+    {
+        return Ok(Vec::new());
+    }
+
+    let mut warnings = Vec::new();
+    let change_name = &context.change_name;
+    let validate = with_store_flag(root, &format!("speckit validate {change_name}"));
+    for relative in find_misplaced_delta_specs(&context.change_dir)? {
+        let capability = relative
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| relative.with_extension(""));
+        warnings.push(format!(
+            "`specs/{}` contains delta requirements outside a capability's spec.md. Move them into `specs/{}/spec.md` so {validate} and archive can read them.",
+            relative.display(),
+            capability.display(),
+        ));
+    }
+
+    if !spec_artifacts
+        .iter()
+        .any(|artifact| context_files.contains_key(&artifact.id))
+    {
+        let target = match spec_artifacts.as_slice() {
+            [artifact] => artifact.id.as_str(),
+            _ => "<artifact-id>",
+        };
+        let instructions = with_store_flag(
+            root,
+            &format!("speckit instructions {target} --change {change_name}"),
+        );
+        warnings.push(format!(
+            "This change has no delta specs and does not declare `skip_specs: true`, so `{validate}` fails on it. Write the delta specs (`{instructions}`), or set `skip_specs: true` in {METADATA_FILENAME} if no specified behavior changes."
+        ));
+    }
+    Ok(warnings)
 }
 
 /// Print implement instructions in human-readable format.
@@ -654,13 +778,19 @@ fn print_implement_instructions_text(instructions: &ImplementInstructions) {
     }
 
     if instructions.state == "blocked" {
-        if let Some(ref missing) = instructions.missing_artifacts {
-            println!("### Blocked");
-            println!();
+        println!("### Blocked");
+        if let Some(missing) = &instructions.missing_artifacts {
             println!("Missing artifacts: {}", missing.join(", "));
-            println!("Use the speckit-continue-change skill to create these first.");
-            println!();
         }
+        println!();
+    }
+
+    if !instructions.warnings.is_empty() {
+        println!("### Warnings");
+        for warning in &instructions.warnings {
+            println!("- {warning}");
+        }
+        println!();
     }
 
     if !instructions.context_files.is_empty() {

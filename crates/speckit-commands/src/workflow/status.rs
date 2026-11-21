@@ -10,6 +10,7 @@ use speckit_core::artifact_graph::{
     LoadChangeContextOptions, format_change_status, load_change_context,
 };
 use speckit_core::change_metadata::read_skip_specs_marker;
+use speckit_core::root_selection::{find_declaring_project_root, with_store_flag};
 
 // -----------------------------------------------------------------------------
 // Types
@@ -55,11 +56,14 @@ pub struct ChangeStatusOutput {
 
 /// Execute the status command.
 pub async fn status_command(options: StatusOptions) -> anyhow::Result<()> {
-    let project_root = super::resolve_project_root(options.store.as_deref()).await?;
+    let root = crate::change::resolve_command_root(options.store.as_deref(), false)?;
+    let project_root = root.path.to_string_lossy().into_owned();
+    let changes_dir = root.changes_dir.to_string_lossy();
+    let new_change_hint = with_store_flag(&root, "speckit new change <name>");
 
     // Handle no-changes case gracefully
     if options.change.is_none() {
-        let available = get_available_changes(&project_root, None).await?;
+        let available = get_available_changes(&project_root, Some(&changes_dir)).await?;
         if available.is_empty() {
             if options.json {
                 print_json(&serde_json::json!({
@@ -68,7 +72,7 @@ pub async fn status_command(options: StatusOptions) -> anyhow::Result<()> {
                 }));
                 return Ok(());
             }
-            println!("No active changes. Create one with: speckit new change <name>");
+            println!("No active changes. Create one with: {new_change_hint}");
             return Ok(());
         }
         anyhow::bail!(
@@ -80,17 +84,14 @@ pub async fn status_command(options: StatusOptions) -> anyhow::Result<()> {
     let change_name = validate_change_exists(
         options.change.as_deref(),
         &project_root,
-        None,
-        Some("speckit new change <name>"),
+        Some(&changes_dir),
+        Some(&new_change_hint),
     )
     .await?;
 
     // Build the change directory used as a fallback context root for the
     // artifact graph loader.
-    let change_dir = std::path::Path::new(&project_root)
-        .join("speckit")
-        .join("changes")
-        .join(&change_name);
+    let change_dir = root.changes_dir.join(&change_name);
 
     // Use the artifact graph rather than a fixed four-file probe. This preserves
     // custom-schema artifacts, concrete glob matches, dependency state, and
@@ -127,8 +128,8 @@ pub async fn status_command(options: StatusOptions) -> anyhow::Result<()> {
         implement_requires: status.implement_requires,
         root: Some(serde_json::json!({
             "path": project_root.replace('\\', "/"),
-            "source": if options.store.is_some() { "store" } else { "nearest" },
-            "storeId": options.store,
+            "source": root.source,
+            "storeId": root.store_id,
         })),
     };
 
@@ -140,7 +141,7 @@ pub async fn status_command(options: StatusOptions) -> anyhow::Result<()> {
             serde_json::json!({
                 "kind": "repo",
                 "root": project_root.replace('\\', "/"),
-                "changesDir": Path::new(&project_root).join("speckit").join("changes").to_string_lossy().replace('\\', "/"),
+                "changesDir": changes_dir.replace('\\', "/"),
                 "defaultSchema": output.schema_name.clone(),
             }),
         );
@@ -148,11 +149,43 @@ pub async fn status_command(options: StatusOptions) -> anyhow::Result<()> {
             "artifactPaths".to_string(),
             serde_json::to_value(status.artifact_paths)?,
         );
+        let mut allowed_edit_roots = vec![project_root.replace('\\', "/")];
+        let constraint = if let Some(store_id) = root.store_id.as_deref() {
+            let planning = format!("Change artifacts live in store '{store_id}' ({project_root}).");
+            if let Some(implementation_root) =
+                find_declaring_project_root(store_id, &std::env::current_dir()?)
+            {
+                let implementation_root = implementation_root.to_string_lossy().replace('\\', "/");
+                allowed_edit_roots.insert(0, implementation_root.clone());
+                format!(
+                    "{planning} Implementation edits go in {implementation_root}, the project on the current path that declares this store. Ask the user before editing any other repository."
+                )
+            } else {
+                format!(
+                    "{planning} Ask the user which repository to edit and make implementation edits there."
+                )
+            }
+        } else {
+            "Repo-local change artifacts and implementation edits are scoped to this project."
+                .to_owned()
+        };
+        let artifact_ids: Vec<_> = output
+            .artifacts
+            .iter()
+            .map(|artifact| artifact.id.as_str())
+            .collect();
         object.insert(
             "actionContext".to_string(),
             serde_json::json!({
                 "projectRoot": project_root.replace('\\', "/"),
-                "artifactIds": output.artifacts.iter().map(|artifact| artifact.id.clone()).collect::<Vec<_>>(),
+                "artifactIds": artifact_ids,
+                "mode": "repo-local",
+                "sourceOfTruth": "repo",
+                "planningArtifacts": artifact_ids,
+                "linkedContext": [],
+                "requiresAffectedAreaSelection": false,
+                "allowedEditRoots": allowed_edit_roots,
+                "constraints": [constraint],
             }),
         );
         print_json(&payload);

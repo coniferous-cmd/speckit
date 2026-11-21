@@ -92,11 +92,10 @@ impl ListCommand {
         let mut changes: Vec<ChangeInfo> = Vec::with_capacity(change_names.len());
         for name in &change_names {
             let change_path = changes_dir.join(name);
-            let progress = get_task_progress_for_change(&change_path).unwrap_or(TaskProgress {
-                completed: 0,
-                total: 0,
-                percentage: 0.0,
-            });
+            let progress = get_task_progress_for_change(&change_path, target_path)
+                .ok()
+                .flatten()
+                .unwrap_or_default();
             let last_modified = get_last_modified(&change_path);
             changes.push(ChangeInfo {
                 name: name.clone(),
@@ -152,7 +151,7 @@ impl ListCommand {
                 } else {
                     0.0
                 };
-                let status = format_task_status(&crate::utils::task_progress::TaskProgress {
+                let status = format_task_status(&TaskProgress {
                     total: change.total_tasks,
                     completed: change.completed_tasks,
                     percentage,

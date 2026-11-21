@@ -406,7 +406,7 @@ pub fn parity_fixture_hashes() -> std::collections::HashMap<&'static str, &'stat
         ),
         (
             "speckit-implement-change",
-            "17aaa43f2b81110ef4e89e3f1a45fc89ee5cb7f34cf98d2c287b5066f9ca1df2",
+            "bba06f496d9c43525b3169f125078a1d7f2ae7ac437c98320274d0be6f1cc127",
         ),
         (
             "speckit-update-change",

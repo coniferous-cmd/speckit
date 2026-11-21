@@ -20,6 +20,9 @@ pub enum SchemaValidationError {
         dependency: String,
     },
 
+    #[error("Invalid implement.requires reference: '{0}' does not exist")]
+    InvalidImplementRequirement(String),
+
     #[error("Cyclic dependency detected: {cycle}")]
     CyclicDependency { cycle: String },
 
@@ -51,6 +54,19 @@ pub fn parse_schema(yaml_content: &str) -> Result<SchemaYaml, SchemaValidationEr
 
     validate_no_duplicate_ids(&schema.artifacts)?;
     validate_requires_references(&schema.artifacts)?;
+    if let Some(phase) = &schema.implement {
+        for requirement in &phase.requires {
+            if !schema
+                .artifacts
+                .iter()
+                .any(|artifact| &artifact.id == requirement)
+            {
+                return Err(SchemaValidationError::InvalidImplementRequirement(
+                    requirement.clone(),
+                ));
+            }
+        }
+    }
     validate_no_cycles(&schema.artifacts)?;
 
     Ok(schema)

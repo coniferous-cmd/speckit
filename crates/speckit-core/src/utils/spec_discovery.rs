@@ -1,6 +1,36 @@
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
+use crate::artifact_graph::resolve_artifact_outputs;
+use crate::parsers::parse_delta_spec;
+
+/// Finds Markdown files whose delta sections would be ignored by the spec readers.
+pub fn find_misplaced_delta_specs(change_dir: &Path) -> anyhow::Result<Vec<PathBuf>> {
+    let change_dir = dunce::canonicalize(change_dir)?;
+    let specs_dir = change_dir.join("specs");
+    let mut misplaced = Vec::new();
+    for path in resolve_artifact_outputs(&change_dir, "specs/**/*.[mM][dD]") {
+        if path.file_name().is_some_and(|name| name == "spec.md") {
+            continue;
+        }
+        let Ok(relative) = path.strip_prefix(&specs_dir) else {
+            continue;
+        };
+        if relative
+            .iter()
+            .any(|part| part.to_string_lossy().starts_with('.'))
+        {
+            continue;
+        }
+        let content = std::fs::read_to_string(&path)?;
+        let sections = parse_delta_spec(&content).section_presence;
+        if sections.added || sections.modified || sections.removed || sections.renamed {
+            misplaced.push(relative.to_path_buf());
+        }
+    }
+    Ok(misplaced)
+}
+
 /// Discover spec files in a directory.
 pub fn discover_spec_files(specs_dir: &Path) -> anyhow::Result<Vec<PathBuf>> {
     let mut spec_files = Vec::new();

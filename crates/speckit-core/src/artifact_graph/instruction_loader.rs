@@ -402,20 +402,7 @@ fn get_unlocked_artifacts(graph: &ArtifactGraph, artifact_id: &str) -> Vec<Strin
 
 /// Formats the status of all artifacts in a change.
 pub fn format_change_status(context: &ChangeContext) -> ChangeStatus {
-    let implement_requires = context
-        .graph
-        .schema()
-        .implement
-        .as_ref()
-        .map(|phase| phase.requires.clone())
-        .unwrap_or_else(|| {
-            context
-                .graph
-                .get_all_artifacts()
-                .into_iter()
-                .map(|a| a.id.clone())
-                .collect()
-        });
+    let implement_requires = context.graph.schema().implement_requires();
 
     let artifacts = context.graph.get_all_artifacts();
     let ready: std::collections::HashSet<String> = context

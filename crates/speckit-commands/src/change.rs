@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use speckit_core::parsers::ChangeParser;
 use speckit_core::root_selection::{ResolveSpeckitRootOptions, resolve_speckit_root};
 use speckit_core::schemas::Delta;
+use speckit_core::utils::task_progress::get_task_progress_for_change;
 use speckit_core::validation::{ValidationLevel, Validator};
 
 /// Options for the change show command.
@@ -194,7 +195,7 @@ pub async fn change_list(options: ChangeListOptions, store: Option<&str>) -> any
                 (name.clone(), 0)
             };
 
-            let task_status = get_task_progress(&changes_dir, name).await;
+            let task_status = get_task_status(&project_root, &changes_dir, name);
 
             entries.push(ChangeListEntry {
                 id: name.clone(),
@@ -226,7 +227,7 @@ pub async fn change_list(options: ChangeListOptions, store: Option<&str>) -> any
     for name in &sorted {
         let change_dir = changes_dir.join(name);
         let proposal_path = change_dir.join("proposal.md");
-        let task_status = get_task_progress(&changes_dir, name).await;
+        let task_status = get_task_status(&project_root, &changes_dir, name);
         let task_text = match &task_status {
             Some(ts) if ts.total > 0 => format!(" [tasks {}/{}]", ts.completed, ts.total),
             _ => String::new(),
@@ -435,26 +436,18 @@ async fn parse_change_deltas(
 }
 
 /// Get task progress for a change.
-async fn get_task_progress(changes_dir: &Path, change_name: &str) -> Option<TaskStatus> {
-    let tasks_path = changes_dir.join(change_name).join("tasks.md");
-    if !tasks_path.exists() {
-        return None;
-    }
-    let content = tokio::fs::read_to_string(&tasks_path).await.ok()?;
-    let mut total = 0;
-    let mut completed = 0;
-    for line in content.lines() {
-        let trimmed = line.trim();
-        if let Some(rest) = trimmed.strip_prefix("- [") {
-            if rest.len() > 2 && rest.as_bytes()[1] == b']' {
-                total += 1;
-                if rest.as_bytes()[0] == b'x' || rest.as_bytes()[0] == b'X' {
-                    completed += 1;
-                }
-            }
-        }
-    }
-    Some(TaskStatus { total, completed })
+fn get_task_status(
+    project_root: &str,
+    changes_dir: &Path,
+    change_name: &str,
+) -> Option<TaskStatus> {
+    let progress =
+        get_task_progress_for_change(&changes_dir.join(change_name), Path::new(project_root))
+            .ok()??;
+    Some(TaskStatus {
+        total: progress.total,
+        completed: progress.completed,
+    })
 }
 
 /// Print next-step hints after validation failure.
@@ -494,17 +487,23 @@ fn atty_is_tty() -> bool {
 /// resolver so `--store <id>` actually takes effect instead of silently falling
 /// back to the working directory.
 pub async fn resolve_project_root(store: Option<&str>) -> anyhow::Result<String> {
-    let cwd = std::env::current_dir()
-        .map_err(|e| anyhow::anyhow!("Cannot get current directory: {e}"))?;
-    let resolved = resolve_speckit_root(&ResolveSpeckitRootOptions {
+    Ok(resolve_command_root(store, true)?
+        .path
+        .to_string_lossy()
+        .into_owned())
+}
+
+pub(crate) fn resolve_command_root(
+    store: Option<&str>,
+    allow_implicit_root: bool,
+) -> anyhow::Result<speckit_core::root_selection::ResolvedSpeckitRoot> {
+    Ok(resolve_speckit_root(&ResolveSpeckitRootOptions {
         store: store.map(|s| s.to_string()),
         store_path: None,
-        start_path: Some(cwd),
-        allow_implicit_root: Some(true),
+        start_path: Some(std::env::current_dir()?),
+        allow_implicit_root: Some(allow_implicit_root),
         global_data_dir: None,
-    })
-    .map_err(|e| anyhow::anyhow!("{}", e.diagnostic.message))?;
-    Ok(resolved.path.to_string_lossy().into_owned())
+    })?)
 }
 
 #[cfg(test)]

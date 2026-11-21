@@ -106,7 +106,7 @@ impl ArchiveCommand {
 
         // ── 2. Validate tasks are complete (unless --no-validate) ───────────
         if !options.no_validate {
-            Self::validate_tasks_complete(&change_dir, &change_name)?;
+            Self::validate_tasks_complete(&change_dir, &change_name, &project_path)?;
         }
 
         // ── 3. Read metadata for skip_specs / retire_capabilities ──────────
@@ -379,10 +379,14 @@ impl ArchiveCommand {
     }
 
     /// Validate that all tasks in the change are complete.
-    fn validate_tasks_complete(change_dir: &Path, change_name: &str) -> Result<()> {
-        let progress = get_task_progress_for_change(change_dir)?;
-
-        if progress.total > 0 && progress.completed < progress.total {
+    fn validate_tasks_complete(
+        change_dir: &Path,
+        change_name: &str,
+        project_root: &Path,
+    ) -> Result<()> {
+        if let Some(progress) = get_task_progress_for_change(change_dir, project_root)?
+            && progress.completed < progress.total
+        {
             return Err(anyhow::anyhow!(
                 "Change '{}' has incomplete tasks: {}/{} ({}%). \
                  Complete all tasks before archiving, or use --no-validate to skip.",

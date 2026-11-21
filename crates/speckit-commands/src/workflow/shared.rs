@@ -31,6 +31,15 @@ pub struct TaskItem {
     pub id: String,
     pub description: String,
     pub done: bool,
+    #[serde(rename = "sourcePath")]
+    pub source_path: String,
+    pub line: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UnavailableTrackingFile {
+    pub path: String,
+    pub reason: String,
 }
 
 /// Instructions for implementing a change's tasks.
@@ -42,9 +51,20 @@ pub struct ImplementInstructions {
     pub context_files: std::collections::HashMap<String, Vec<String>>,
     pub progress: ImplementProgress,
     pub tasks: Vec<TaskItem>,
+    #[serde(rename = "taskTrackingConfigured")]
+    pub task_tracking_configured: bool,
+    #[serde(
+        rename = "unavailableTrackingFiles",
+        skip_serializing_if = "Vec::is_empty"
+    )]
+    pub unavailable_tracking_files: Vec<UnavailableTrackingFile>,
     pub state: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub missing_artifacts: Option<Vec<String>>,
+    #[serde(rename = "missingPrerequisites", skip_serializing_if = "Vec::is_empty")]
+    pub missing_prerequisites: Vec<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
     pub instruction: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub references: Option<Vec<ReferenceIndexEntry>>,

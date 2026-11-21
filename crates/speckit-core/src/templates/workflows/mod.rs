@@ -109,7 +109,7 @@ pub fn get_specx_continue_command_template() -> CommandTemplate {
 pub fn get_implement_change_skill_template() -> SkillTemplate {
     SkillTemplate {
         name: "speckit-implement-change".into(),
-        description: "Implement tasks from an Speckit change.".into(),
+        description: "Implement tasks from a Speckit change. Use when the user wants to start or continue implementing a change, or work through its tasks.".into(),
         instructions: get_implement_instructions(),
         license: Some("MIT".into()),
         compatibility: Some("Requires speckit CLI.".into()),

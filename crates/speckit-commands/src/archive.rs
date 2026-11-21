@@ -4,6 +4,7 @@ use anyhow::Result;
 use std::path::Path;
 
 use speckit_core::archive::{ArchiveCommand, ArchiveOptions};
+use speckit_core::root_selection::{ResolveSpeckitRootOptions, resolve_speckit_root};
 
 /// Execute the archive command.
 pub fn execute(
@@ -15,6 +16,13 @@ pub fn execute(
     store: Option<String>,
     project_path: &Path,
 ) -> Result<Option<speckit_core::archive::ArchiveResult>> {
+    let root = resolve_speckit_root(&ResolveSpeckitRootOptions {
+        store: store.clone(),
+        store_path: None,
+        start_path: Some(project_path.to_path_buf()),
+        allow_implicit_root: Some(true),
+        global_data_dir: None,
+    })?;
     let options = ArchiveOptions {
         yes,
         skip_specs,
@@ -23,5 +31,5 @@ pub fn execute(
         store,
         ..Default::default()
     };
-    ArchiveCommand::execute(change_name, &options, project_path)
+    ArchiveCommand::execute(change_name, &options, &root.path)
 }

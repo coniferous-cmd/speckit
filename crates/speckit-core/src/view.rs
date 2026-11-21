@@ -155,12 +155,15 @@ impl ViewCommand {
             }
 
             let change_dir = changes_dir.join(&name);
-            let progress = match get_task_progress_for_change(&change_dir) {
-                Ok(p) => ChangeProgress {
+            let progress = match get_task_progress_for_change(
+                &change_dir,
+                speckit_dir.parent().unwrap_or(speckit_dir),
+            ) {
+                Ok(Some(p)) => ChangeProgress {
                     total: p.total,
                     completed: p.completed,
                 },
-                Err(_) => ChangeProgress {
+                _ => ChangeProgress {
                     total: 0,
                     completed: 0,
                 },

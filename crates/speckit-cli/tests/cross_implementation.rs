@@ -389,6 +389,216 @@ fn implement_cli_contract_and_legacy_config() {
 }
 
 #[test]
+fn implement_uses_the_declaring_project_and_the_selected_store() {
+    let (temp, local_project, _nested, config_home, data_home) = fixture();
+    let store = temp.path().join("planning");
+    let store_arg = store.to_str().unwrap();
+    json_stdout(&run_cli(
+        &local_project,
+        &config_home,
+        &data_home,
+        &["store", "setup", "plans", "--path", store_arg, "--json"],
+    ));
+
+    let code_project = temp.path().join("code");
+    let nested = code_project.join("src");
+    std::fs::create_dir_all(code_project.join("speckit")).unwrap();
+    std::fs::create_dir_all(&nested).unwrap();
+    std::fs::write(code_project.join("speckit/config.yaml"), "store: plans\n").unwrap();
+
+    let created = json_stdout(&run_cli(
+        &local_project,
+        &config_home,
+        &data_home,
+        &[
+            "new",
+            "change",
+            "store-change",
+            "--store",
+            "plans",
+            "--json",
+        ],
+    ));
+    let store = store.canonicalize().unwrap();
+    let change_dir = store.join("speckit/changes/store-change");
+    assert_eq!(
+        Path::new(created["change"]["path"].as_str().unwrap()),
+        change_dir
+    );
+    assert!(!local_project.join("speckit/changes/store-change").exists());
+
+    let status_args = ["status", "--change", "store-change", "--json"];
+    let explicit_status_args = [
+        "status",
+        "--change",
+        "store-change",
+        "--json",
+        "--store",
+        "plans",
+    ];
+    for args in [status_args.as_slice(), explicit_status_args.as_slice()] {
+        let status = json_stdout(&run_cli(&nested, &config_home, &data_home, args));
+        assert_eq!(
+            status["actionContext"]["allowedEditRoots"],
+            serde_json::json!([code_project.canonicalize().unwrap(), store])
+        );
+        assert_eq!(status["root"]["storeId"], "plans");
+    }
+    let unrelated = json_stdout(&run_cli(
+        &local_project,
+        &config_home,
+        &data_home,
+        &explicit_status_args,
+    ));
+    assert_eq!(
+        unrelated["actionContext"]["allowedEditRoots"],
+        serde_json::json!([store])
+    );
+    assert!(
+        unrelated["actionContext"]["constraints"][0]
+            .as_str()
+            .unwrap()
+            .contains("Ask the user")
+    );
+
+    let args = [
+        "instructions",
+        "implement",
+        "--change",
+        "store-change",
+        "--store",
+        "plans",
+        "--json",
+    ];
+    let blocked = json_stdout(&run_cli(&nested, &config_home, &data_home, &args));
+    assert_eq!(blocked["state"], "blocked");
+    assert_eq!(blocked["missing_artifacts"], serde_json::json!(["tasks"]));
+    let prerequisites = blocked["missingPrerequisites"].as_array().unwrap();
+    assert_eq!(prerequisites.first().unwrap(), "proposal");
+    assert_eq!(prerequisites.last().unwrap(), "tasks");
+    assert_eq!(prerequisites.len(), 4);
+    assert!(
+        blocked["instruction"]
+            .as_str()
+            .unwrap()
+            .contains("--store plans")
+    );
+
+    std::fs::write(change_dir.join("tasks.md"), "- [x] Finished task\n- [ ]\n").unwrap();
+    let pending = json_stdout(&run_cli(&nested, &config_home, &data_home, &args));
+    assert_eq!(pending["state"], "ready");
+    assert_eq!(
+        pending["progress"],
+        serde_json::json!({"total": 2, "complete": 1, "remaining": 1})
+    );
+    assert!(
+        pending["warnings"][0]
+            .as_str()
+            .unwrap()
+            .contains("skip_specs")
+    );
+    let listed = json_stdout(&run_cli(
+        &nested,
+        &config_home,
+        &data_home,
+        &["list", "--store", "plans", "--json"],
+    ));
+    assert_eq!(
+        listed[0]["task_status"],
+        serde_json::json!({"total": 2, "completed": 1})
+    );
+
+    let archive_args = [
+        "archive",
+        "store-change",
+        "--store",
+        "plans",
+        "--skip-specs",
+        "--yes",
+        "--json",
+    ];
+    let refused = json_error(&run_cli(
+        &local_project,
+        &config_home,
+        &data_home,
+        &archive_args,
+    ));
+    assert!(refused.to_string().contains("incomplete tasks"));
+    std::fs::write(change_dir.join("tasks.md"), "- [x] Finished task\n").unwrap();
+    let archived = json_stdout(&run_cli(
+        &local_project,
+        &config_home,
+        &data_home,
+        &archive_args,
+    ));
+    let archived_path = Path::new(archived["path"].as_str().unwrap());
+    assert!(archived_path.starts_with(store.join("speckit/changes/archive")));
+    assert!(archived_path.is_dir());
+}
+
+#[test]
+fn implement_uses_schema_tracking_patterns_and_returns_exact_task_locations() {
+    let (_temp, project, _nested, config_home, data_home) = fixture();
+    let schema_dir = project.join("speckit/schemas/checklists");
+    let change_dir = project.join("speckit/changes/tracked");
+    std::fs::create_dir_all(&schema_dir).unwrap();
+    std::fs::create_dir_all(change_dir.join("checklists")).unwrap();
+    let schema = "name: checklists\nversion: 1\nartifacts:\n  - id: plan\n    generates: plan.md\n    description: Plan\n    template: plan.md\n";
+    std::fs::write(schema_dir.join("schema.yaml"), schema).unwrap();
+    std::fs::write(change_dir.join(".speckit.yaml"), "schema: checklists\n").unwrap();
+    let args = ["instructions", "implement", "--change", "tracked", "--json"];
+    let run = || json_stdout(&run_cli(&project, &config_home, &data_home, &args));
+
+    let no_phase = run();
+    assert_eq!(no_phase["state"], "blocked");
+    assert_eq!(no_phase["missing_artifacts"], serde_json::json!(["plan"]));
+    std::fs::write(change_dir.join("plan.md"), "# Plan\n").unwrap();
+    let no_tracking = run();
+    assert_eq!(no_tracking["state"], "ready");
+    assert_eq!(no_tracking["taskTrackingConfigured"], false);
+
+    std::fs::write(
+        schema_dir.join("schema.yaml"),
+        format!("{schema}implement:\n  requires: [plan]\n  tracks: 'checklists/*.md'\n"),
+    )
+    .unwrap();
+    let first = change_dir.join("checklists/a.md");
+    let second = change_dir.join("checklists/b.md");
+    std::fs::write(&first, "# Tasks\n1. [ ] Keep the whole description\n   across two lines.\n- [ x] Done\n- [A](./reference.md)\n").unwrap();
+    std::fs::write(&second, "+ [~] Follow up\n- [] Confirm result\n").unwrap();
+    let tracked = run();
+    assert_eq!(tracked["state"], "ready");
+    assert_eq!(tracked["taskTrackingConfigured"], true);
+    assert_eq!(
+        tracked["progress"],
+        serde_json::json!({"total": 4, "complete": 1, "remaining": 3})
+    );
+    assert_eq!(
+        tracked["tasks"][0]["description"],
+        "Keep the whole description across two lines."
+    );
+    assert_eq!(tracked["tasks"][0]["line"], 2);
+    assert_eq!(
+        tracked["tasks"][0]["sourcePath"],
+        serde_json::json!(first.canonicalize().unwrap())
+    );
+    assert_eq!(
+        tracked["tasks"][2]["sourcePath"],
+        serde_json::json!(second.canonicalize().unwrap())
+    );
+    let listed = json_stdout(&run_cli(
+        &project,
+        &config_home,
+        &data_home,
+        &["list", "--json"],
+    ));
+    assert_eq!(
+        listed[0]["task_status"],
+        serde_json::json!({"total": 4, "completed": 1})
+    );
+}
+
+#[test]
 fn init_and_update_generate_implement_surfaces_for_each_delivery_mode() {
     let (_temp, project, _nested, config_home, data_home) = fixture();
     let global_dir = config_home.join("speckit");
@@ -413,6 +623,13 @@ fn init_and_update_generate_implement_surfaces_for_each_delivery_mode() {
             .is_file()
     );
     assert!(!project.join(".claude/commands/specx/implement.md").exists());
+    let skill =
+        std::fs::read_to_string(project.join(".claude/skills/speckit-implement-change/SKILL.md"))
+            .unwrap();
+    assert!(skill.contains("rerun this workflow with its name"));
+    assert!(!skill.contains("/speckit:implement"));
+    assert!(skill.contains("`context_files`"));
+    assert!(skill.contains("`sourcePath` and `line`"));
 
     std::fs::write(&global_config, r#"{"delivery":"commands"}"#).unwrap();
     let commands_init = run_cli(

@@ -1,7 +1,7 @@
-use globset::{Glob, GlobMatcher};
+use globset::GlobBuilder;
 use std::collections::BTreeSet;
-use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
+use walkdir::WalkDir;
 
 /// Checks if a path contains glob pattern characters.
 pub fn is_glob_pattern(pattern: &str) -> bool {
@@ -22,57 +22,55 @@ pub fn resolve_artifact_output_path(change_dir: &Path, generates: &str) -> PathB
 ///
 /// Returns absolute file paths. Glob matches are sorted for deterministic output.
 pub fn resolve_artifact_outputs(change_dir: &Path, generates: &str) -> Vec<PathBuf> {
-    let output_path = change_dir.join(generates);
+    let normalized_pattern = generates.replace('\\', "/");
+    let pattern = Path::new(&normalized_pattern);
+    if pattern
+        .components()
+        .any(|component| !matches!(component, Component::Normal(_) | Component::CurDir))
+    {
+        return Vec::new();
+    }
+    let Ok(root) = dunce::canonicalize(change_dir) else {
+        return Vec::new();
+    };
 
     if !is_glob_pattern(generates) {
-        // Simple path: check if it's a file
-        return match fs::metadata(&output_path) {
-            Ok(meta) if meta.is_file() => {
-                let canon = dunce::canonicalize(&output_path).unwrap_or(output_path);
-                vec![canon]
-            }
-            _ => vec![],
-        };
+        return dunce::canonicalize(root.join(pattern))
+            .ok()
+            .filter(|path| path.starts_with(&root) && path.is_file())
+            .into_iter()
+            .collect();
     }
 
-    // Glob pattern: use globset for matching
-    let normalized_pattern = generates.replace('\\', "/");
-    let glob = match Glob::new(&normalized_pattern) {
+    let normalized_pattern = normalized_pattern.trim_start_matches("./");
+    let glob = match GlobBuilder::new(normalized_pattern)
+        .literal_separator(true)
+        .build()
+    {
         Ok(g) => g.compile_matcher(),
         Err(_) => return vec![],
     };
 
-    // Walk the change directory to find matches
-    let mut matches = BTreeSet::new();
-    walkdir_matches(change_dir, change_dir, &glob, &mut matches);
-
-    matches.into_iter().collect()
-}
-
-/// Recursively walks a directory collecting files that match the glob matcher.
-fn walkdir_matches(root: &Path, dir: &Path, glob: &GlobMatcher, results: &mut BTreeSet<PathBuf>) {
-    let entries = match fs::read_dir(dir) {
-        Ok(e) => e,
-        Err(_) => return,
-    };
-
-    for entry in entries.flatten() {
-        let path = entry.path();
-        let relative = match path.strip_prefix(root) {
-            Ok(r) => r,
-            Err(_) => continue,
-        };
-
-        // Convert to posix-style for matching
-        let relative_str = relative.to_string_lossy().replace('\\', "/");
-
-        if path.is_dir() {
-            walkdir_matches(root, &path, glob, results);
-        } else if path.is_file() && glob.is_match(&relative_str) {
-            let canon = dunce::canonicalize(&path).unwrap_or(path);
-            results.insert(canon);
-        }
-    }
+    WalkDir::new(&root)
+        .follow_links(true)
+        .into_iter()
+        .filter_entry(|entry| {
+            !entry.path_is_symlink()
+                || dunce::canonicalize(entry.path()).is_ok_and(|path| path.starts_with(&root))
+        })
+        .filter_map(Result::ok)
+        .filter(|entry| entry.file_type().is_file())
+        .filter(|entry| {
+            entry
+                .path()
+                .strip_prefix(&root)
+                .is_ok_and(|path| glob.is_match(path))
+        })
+        .filter_map(|entry| dunce::canonicalize(entry.path()).ok())
+        .filter(|path| path.starts_with(&root))
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect()
 }
 
 /// Checks if an artifact has at least one resolved output file.

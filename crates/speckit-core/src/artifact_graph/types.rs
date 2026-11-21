@@ -33,7 +33,7 @@ pub struct Artifact {
 pub struct ImplementPhase {
     /// Artifact IDs that must exist before implement is available.
     pub requires: Vec<String>,
-    /// Path to a file with checkboxes for progress tracking (relative to
+    /// Path or glob for files with checkboxes for progress tracking (relative to
     /// change dir), or `None` if no tracking is needed.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tracks: Option<String>,
@@ -61,6 +61,20 @@ pub struct SchemaYaml {
     /// Optional implement phase configuration.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub implement: Option<ImplementPhase>,
+}
+
+impl SchemaYaml {
+    pub fn implement_requires(&self) -> Vec<String> {
+        self.implement.as_ref().map_or_else(
+            || {
+                self.artifacts
+                    .iter()
+                    .map(|artifact| artifact.id.clone())
+                    .collect()
+            },
+            |phase| phase.requires.clone(),
+        )
+    }
 }
 
 /// A set of completed artifact IDs, used for tracking change progress.
