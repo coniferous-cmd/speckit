@@ -386,59 +386,61 @@ pub const PARITY_BASELINE_VERSION: &str = "PARITY-BASELINE";
 /// skill's generated file content when rendered with `PARITY_BASELINE_VERSION`
 /// as the `generatedBy` value.
 ///
-/// These values are produced by running `regen-parity-hashes.mjs` against the
-/// current source. When a workflow template is intentionally changed, update
-/// the corresponding hash here and in the integration tests in
-/// `skill_parity.rs` simultaneously.
+/// These values are produced by `cargo run -p speckit-core --example
+/// parity_hashes` against the current source. When a workflow template (or the
+/// shared project-root guard) is intentionally changed, copy every DRIFT
+/// line's hash into this table in the same commit; the integration test
+/// `generated_content_hash_matches_fixture_for_every_workflow` in
+/// `skill_parity.rs` reads this table and fails until it is refreshed.
 pub fn parity_fixture_hashes() -> std::collections::HashMap<&'static str, &'static str> {
     let entries: [(&'static str, &'static str); 12] = [
         (
             "speckit-explore",
-            "88e1612ff9ad4aa0322cc73015efbec006dd66cfc94086cba4910be24c094deb",
+            "111b8970e13913b44e74b2d0b06c2862354e532722d7e0deb927a9729988a0c2",
         ),
         (
             "speckit-new-change",
-            "36f8c6c21ddb9fe0308acc6fd0998e870cc7de4c1c2762ecd0dfe8582022a9df",
+            "b911475ae55498b90c0adcb0fd66b23a1d3a5f36cd9c2762ae2b0b7971e3062a",
         ),
         (
             "speckit-continue-change",
-            "0aade44dd759630a49de80a6f9de546620655892d3d9d115fd043de14b03febc",
+            "58a69d1e96a3c549c04bbb2e7a5faa5ec961898bd6e8ef0a93aa879b41c2999a",
         ),
         (
             "speckit-implement-change",
-            "bba06f496d9c43525b3169f125078a1d7f2ae7ac437c98320274d0be6f1cc127",
+            "98f00a5fbb8378140ba587ff785cfadf51f2b71f219ddfa1f22613d14469132e",
         ),
         (
             "speckit-update-change",
-            "70ed063740386a196a65442ebd5ddfc619d9c880c8d288f131010e1684c5c950",
+            "8ff0b9f13e0e8cca8e7a4f84da89dbd0665a5e7dd0276201a2a430198e6c6a1a",
         ),
         (
             "speckit-ff-change",
-            "9170b4a8e301cfe5f45ef520b7cc9c325b7b75e10383b3236de0073028b9eda1",
+            "6edc7b161e59f3aa83b251076302bf4c2a1dfad951354a04db72c4b0077d8ce5",
         ),
         (
             "speckit-sync-specs",
-            "3e6622d8b1023efc7759fb5c4b3d65f380deb79640086f9c8740314cee7648c3",
+            "486ff6fcc653deb39bb780ad04a749dab66236a7ac1149b145cd440460bfe2af",
         ),
         (
             "speckit-archive-change",
-            "62025dabf21b40be46b41c2c2a520035d3a8676780924e179feaf80e74b2af4f",
+            "0aa194e93c8a70530812fce6023462e8ac62df98b6fe988a9452fcd24ce7895a",
         ),
         (
             "speckit-bulk-archive-change",
-            "b5e1fecb057629b7e96a80f7d2b36ab043c211a7dfb50d234bf3d088977b690f",
+            "1d4de3d2155fc1500a4bf560283200f7b2919bf3e6c30c405861dcb8a6453be7",
         ),
         (
             "speckit-verify-change",
-            "8f9a255e656830a32491b03fa898bace87901652f3746683f899ebace0a19e38",
+            "fe222b197f0a9032d798dd19208071b0982dabea59cf06bf2a45729ad0c38954",
         ),
         (
             "speckit-onboard",
-            "3b68bef27442febc399b31a849359fcf871a166920d77dff4dc8d4b1ed2cce4f",
+            "00b605a147cf01b39da4935adf2c3e44dfd69d8f82e28245865c5bba65939bd5",
         ),
         (
             "speckit-propose",
-            "793074e2188902a48405f6458d1eaf41d71eb7bdf9961a81a6f0b208de89ba7c",
+            "72221f59e54708589137e706abf419f833ea01dc796fb08cad5cfe55f7e627fa",
         ),
     ];
     entries.into_iter().collect()
