@@ -65,12 +65,25 @@ impl ViewCommand {
     /// is shown in the header so the operator can confirm which project they
     /// are looking at.
     pub fn execute(&self, target_path: &Path, store_id: Option<&str>) -> Result<()> {
+        self.execute_with_global_data_dir(target_path, store_id, None)
+    }
+
+    /// Same as [`Self::execute`], but reads the store registry from
+    /// `global_data_dir` instead of the machine's real one. Tests pass an
+    /// empty directory so the result does not depend on which stores happen
+    /// to be registered on the host.
+    pub fn execute_with_global_data_dir(
+        &self,
+        target_path: &Path,
+        store_id: Option<&str>,
+        global_data_dir: Option<std::path::PathBuf>,
+    ) -> Result<()> {
         let resolved = resolve_speckit_root(&ResolveSpeckitRootOptions {
             store: store_id.map(|s| s.to_string()),
             store_path: None,
             start_path: Some(target_path.to_path_buf()),
             allow_implicit_root: Some(true),
-            global_data_dir: None,
+            global_data_dir,
         })?;
 
         let speckit_dir = resolved.path.join(SPECKIT_DIR_NAME);
@@ -484,11 +497,20 @@ mod tests {
         tempfile::tempdir().unwrap()
     }
 
+    /// An empty global data dir: no registry file, so root selection sees no
+    /// registered stores regardless of what this machine has registered.
+    fn empty_global_data_dir(temp: &tempfile::TempDir) -> std::path::PathBuf {
+        let dir = temp.path().join("global-data");
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
     #[test]
     fn execute_fails_without_speckit_dir() {
         let temp = setup_temp_dir();
         let cmd = ViewCommand::new();
-        let result = cmd.execute(temp.path(), None);
+        let result =
+            cmd.execute_with_global_data_dir(temp.path(), None, Some(empty_global_data_dir(&temp)));
         assert!(result.is_err());
         assert!(
             result
@@ -505,7 +527,8 @@ mod tests {
         fs::create_dir_all(&speckit).unwrap();
 
         let cmd = ViewCommand::new();
-        let result = cmd.execute(temp.path(), None);
+        let result =
+            cmd.execute_with_global_data_dir(temp.path(), None, Some(empty_global_data_dir(&temp)));
         assert!(result.is_ok());
     }
 
