@@ -233,7 +233,17 @@ async fn validate_by_type(
             .join("speckit")
             .join("changes")
             .join(id);
-        validate_change_dir(&change_dir, strict).await
+        validate_change_dir(
+            &change_dir,
+            strict,
+            Some(
+                Path::new(project_root)
+                    .join("speckit")
+                    .join("specs")
+                    .as_path(),
+            ),
+        )
+        .await
     } else {
         let spec_file = Path::new(project_root)
             .join("speckit")
@@ -352,7 +362,12 @@ async fn run_bulk_validation(
         jobs.spawn(async move {
             let start = std::time::Instant::now();
             let change_dir = Path::new(&root).join("speckit").join("changes").join(&id);
-            let (valid, issues) = validate_change_dir(&change_dir, strict).await;
+            let (valid, issues) = validate_change_dir(
+                &change_dir,
+                strict,
+                Some(Path::new(&root).join("speckit").join("specs").as_path()),
+            )
+            .await;
             BulkItemResult {
                 id,
                 item_type: "change".to_string(),
@@ -595,7 +610,11 @@ async fn run_archived_task_validation(project_root: &str, json: bool) -> anyhow:
 }
 
 /// Validate a change directory.
-async fn validate_change_dir(change_dir: &Path, strict: bool) -> (bool, Vec<ValidationIssue>) {
+async fn validate_change_dir(
+    change_dir: &Path,
+    strict: bool,
+    main_specs_dir: Option<&Path>,
+) -> (bool, Vec<ValidationIssue>) {
     let mut issues = Vec::new();
 
     if !change_dir.is_dir() {
@@ -621,13 +640,34 @@ async fn validate_change_dir(change_dir: &Path, strict: bool) -> (bool, Vec<Vali
         );
     }
 
-    let specs_dir = change_dir.join("specs");
-    if !specs_dir.is_dir() {
-        issues.push(ValidationIssue {
-            level: "WARNING".to_string(),
+    // Delta specs are the part archive merges into the main specs, so they are
+    // validated here rather than warned about. Before this, a change with a
+    // zero-delta `specs/`, an empty `## ADDED Requirements` section or a
+    // MODIFIED block naming nothing passed `validate <change>` and failed only
+    // at archive.
+    match speckit_core::validation::validate_change_deltas(
+        change_dir,
+        &speckit_core::validation::DeltaValidationOptions {
+            main_specs_dir: main_specs_dir.map(|path| path.to_path_buf()),
+        },
+    ) {
+        Ok(delta_issues) => issues.extend(delta_issues.into_iter().map(|issue| {
+            ValidationIssue {
+                level: match issue.level {
+                    ValidationLevel::Error => "ERROR",
+                    ValidationLevel::Warning => "WARNING",
+                    ValidationLevel::Info => "INFO",
+                }
+                .to_string(),
+                path: issue.path,
+                message: issue.message,
+            }
+        })),
+        Err(error) => issues.push(ValidationIssue {
+            level: "ERROR".to_string(),
             path: "specs/".to_string(),
-            message: "No specs/ directory found".to_string(),
-        });
+            message: error.to_string(),
+        }),
     }
 
     let valid = if strict {

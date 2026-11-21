@@ -290,7 +290,18 @@ pub async fn change_validate(
         anyhow::bail!("Change \"{name}\" not found at {}", change_dir.display());
     }
 
-    let report = validate_change(&name, &change_dir, options.strict).await;
+    let report = validate_change(
+        &name,
+        &change_dir,
+        options.strict,
+        Some(
+            Path::new(&project_root)
+                .join("speckit")
+                .join("specs")
+                .as_path(),
+        ),
+    )
+    .await;
 
     if options.json {
         crate::shared_output::print_json(&report);
@@ -320,7 +331,12 @@ pub async fn change_validate(
 }
 
 /// Validate a change directory.
-async fn validate_change(_name: &str, change_dir: &Path, strict: bool) -> ChangeValidationReport {
+async fn validate_change(
+    _name: &str,
+    change_dir: &Path,
+    strict: bool,
+    main_specs_dir: Option<&Path>,
+) -> ChangeValidationReport {
     let mut issues = Vec::new();
 
     let proposal_path = change_dir.join("proposal.md");
@@ -352,35 +368,33 @@ async fn validate_change(_name: &str, change_dir: &Path, strict: bool) -> Change
         }
     }
 
-    // Check for specs
-    let specs_dir = change_dir.join("specs");
-    if !specs_dir.is_dir() {
-        issues.push(ValidationIssue {
-            level: "WARNING".to_string(),
+    // The delta specs are what archive merges into the main specs, so they are
+    // validated structurally here. A `specs/` that is missing, empty, or full of
+    // blocks the delta reader cannot apply is now named instead of summarized as
+    // "no .md files found".
+    match speckit_core::validation::validate_change_deltas(
+        change_dir,
+        &speckit_core::validation::DeltaValidationOptions {
+            main_specs_dir: main_specs_dir.map(|path| path.to_path_buf()),
+        },
+    ) {
+        Ok(delta_issues) => issues.extend(delta_issues.into_iter().map(|issue| {
+            ValidationIssue {
+                level: match issue.level {
+                    ValidationLevel::Error => "ERROR",
+                    ValidationLevel::Warning => "WARNING",
+                    ValidationLevel::Info => "INFO",
+                }
+                .to_string(),
+                path: issue.path,
+                message: issue.message,
+            }
+        })),
+        Err(error) => issues.push(ValidationIssue {
+            level: "ERROR".to_string(),
             path: "specs/".to_string(),
-            message:
-                "No specs/ directory found. Use ## ADDED/MODIFIED/REMOVED Requirements headers."
-                    .to_string(),
-        });
-    } else {
-        // Check for spec files
-        let has_specs = std::fs::read_dir(&specs_dir)
-            .ok()
-            .map(|mut rd| {
-                rd.any(|e| {
-                    e.ok()
-                        .map(|e| e.path().extension().map(|ext| ext == "md").unwrap_or(false))
-                        .unwrap_or(false)
-                })
-            })
-            .unwrap_or(false);
-        if !has_specs {
-            issues.push(ValidationIssue {
-                level: "WARNING".to_string(),
-                path: "specs/".to_string(),
-                message: "specs/ directory exists but contains no .md files".to_string(),
-            });
-        }
+            message: error.to_string(),
+        }),
     }
 
     // Strict mode: check tasks
