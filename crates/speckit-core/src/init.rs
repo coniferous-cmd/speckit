@@ -104,16 +104,6 @@ impl InitCommand {
             }
         }
 
-        // Handle legacy cleanup
-        let deferred_legacy_cleanup = self.handle_legacy_cleanup(&project_path, extend_mode)?;
-
-        // Create directory structure
-        self.create_directory_structure(&speckit_path, extend_mode)?;
-
-        // Determine which tools to set up
-        let selected_tools = self.resolve_tools_arg().unwrap_or_default();
-        let validated_tools = self.validate_tools(&selected_tools, &project_path)?;
-
         // Migrate legacy workflow IDs in the global config (e.g. apply → implement)
         // before resolving the profile filter, so the active workflow set reflects
         // the rename even when the user has a stale `workflows` list.
@@ -130,13 +120,29 @@ impl InitCommand {
             .clone()
             .unwrap_or_else(profiles::all_workflow_strings);
 
-        // The welcome screen is intentionally limited to interactive init. In
-        // particular, `--tools` and CI/non-TTY invocations must never wait for
-        // input. `animation` still controls the interactive rendering branch.
-        if self.can_prompt_interactively() {
+        let selected_tools = if self.can_prompt_interactively() {
             crate::ui::welcome_screen::show_welcome_screen(&workflows, Some(self.animation))
                 .context("Failed to render welcome screen")?;
-        }
+            let choices = AI_TOOLS.iter().map(|tool| tool.name.as_str()).collect();
+            let Some(selection) =
+                inquire::MultiSelect::new("Select AI tools to configure", choices)
+                    .raw_prompt_skippable()
+                    .context("Failed to select AI tools")?
+            else {
+                println!("Initialization cancelled.");
+                return Ok(());
+            };
+            selection
+                .into_iter()
+                .map(|choice| AI_TOOLS[choice.index].value.clone())
+                .collect()
+        } else {
+            self.resolve_tools_arg().unwrap_or_default()
+        };
+        let validated_tools = self.validate_tools(&selected_tools, &project_path)?;
+
+        let deferred_legacy_cleanup = self.handle_legacy_cleanup(&project_path, extend_mode)?;
+        self.create_directory_structure(&speckit_path, extend_mode)?;
 
         // Generate skills and commands
         let results = self.generate_skills_and_commands(
