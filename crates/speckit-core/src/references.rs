@@ -173,6 +173,10 @@ pub fn extract_first_purpose_line(markdown: &str) -> String {
 }
 
 /// Sanitize a string for inline rendering: strip control characters, limit length.
+///
+/// The limit is measured in bytes but the cut lands on the last character
+/// boundary at or before it, so multibyte content (an em dash in a rule, a
+/// CJK project name in `context:`) truncates instead of panicking.
 pub fn sanitize_inline(value: &str, max_length: usize) -> String {
     let flattened: String = value
         .chars()
@@ -180,10 +184,91 @@ pub fn sanitize_inline(value: &str, max_length: usize) -> String {
         .collect::<String>();
     let trimmed = flattened.trim().to_string();
     if trimmed.len() > max_length {
-        format!("{}...", &trimmed[..max_length])
+        let mut end = max_length;
+        while end > 0 && !trimmed.is_char_boundary(end) {
+            end -= 1;
+        }
+        format!("{}...", &trimmed[..end])
     } else {
         trimmed
     }
+}
+
+/// The tags the instruction printer uses to frame its blocks.
+///
+/// A block ends at its own closing tag and nowhere else, so this is the entire
+/// breakout surface: neutralize these and repo-supplied text cannot escape the
+/// element that marks it as data nor forge a block that carries authority.
+pub const ENVELOPE_TAGS: [&str; 14] = [
+    "artifact",
+    "dependencies",
+    "dependency",
+    "description",
+    "instruction",
+    "output",
+    "path",
+    "project_context",
+    "rules",
+    "success_criteria",
+    "task",
+    "template",
+    "unlocks",
+    "warning",
+];
+
+thread_local! {
+    /// Matches an opening or closing envelope tag, including one with
+    /// attributes. The attribute tail uses `[^<>]` rather than `[^>]` so a run
+    /// of unterminated `<task ...` openers cannot make each start position scan
+    /// to end of input (the quadratic trap the first version of this fell into).
+    /// The separator is `\s`, not a space or tab: XML allows a line break
+    /// before `>` or an attribute, so a multiline value could otherwise split a
+    /// tag past this.
+    static ENVELOPE_TAG: regex::Regex = regex::RegexBuilder::new(
+        &format!(
+            r"<(/?)({})(\s[^<>]*)?>",
+            ENVELOPE_TAGS.join("|")
+        ),
+    )
+    .case_insensitive(true)
+    .build()
+    .expect("envelope tag regex is valid");
+}
+
+/// Escape every metacharacter in an attribute value.
+///
+/// Attribute values are ids and directory names, never prose, so escaping all
+/// of them costs nothing and stops a quote from closing the attribute and
+/// forging siblings on the tag.
+pub fn escape_envelope_attribute(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+}
+
+/// Neutralize the envelope's own tags - opening and closing - in repo-supplied
+/// text, so it cannot close the block that frames it as data nor forge a new
+/// block that carries authority.
+///
+/// Deliberately narrow: only this fixed vocabulary is touched. Escaping every
+/// angle bracket also works, but it mangles ordinary content for everyone.
+/// The spec-driven schema itself writes `### Requirement: <name>` and
+/// `speckit show "<spec-id>"`; custom templates carry `<details>`; and
+/// `context:` routinely holds `R&D`, `cargo build && cargo test` or
+/// `Result<T, E>`. All of those would reach the agent entity-encoded - a real
+/// cost paid by every user, against a threat only these tags can carry.
+pub fn escape_envelope_tags(value: &str) -> String {
+    ENVELOPE_TAG.with(|pattern| {
+        pattern
+            .replace_all(value, |caps: &regex::Captures<'_>| {
+                let slash = caps.get(1).map_or("", |m| m.as_str());
+                let attrs = caps.get(3).map_or("", |m| m.as_str());
+                format!("&lt;{}{}{}&gt;", slash, &caps[2], attrs)
+            })
+            .into_owned()
+    })
 }
 
 /// Build a fetch recipe for a store id.

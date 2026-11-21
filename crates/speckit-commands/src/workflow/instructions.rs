@@ -21,6 +21,7 @@ use speckit_core::artifact_graph::{
     load_change_context, resolve_artifact_outputs,
 };
 use speckit_core::change_metadata::METADATA_FILENAME;
+use speckit_core::references::{escape_envelope_attribute, escape_envelope_tags};
 use speckit_core::root_selection::{ResolvedSpeckitRoot, to_root_output, with_store_flag};
 use speckit_core::utils::spec_discovery::find_misplaced_delta_specs;
 use speckit_core::utils::task_progress::parse_task_lines;
@@ -53,7 +54,13 @@ pub struct ArtifactInstructions {
     pub change_dir: String,
     pub resolved_output_path: String,
     pub description: String,
-    pub instruction: String,
+    /// Per-artifact guidance from the schema. Absent when the schema declares
+    /// none: the field is deliberately not filled with boilerplate, because a
+    /// synthetic sentence would tell the agent "the schema has said everything"
+    /// when it has said nothing.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub instruction: Option<String>,
+    /// Project background from `context:` in the project config.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub context: Option<String>,
     /// Artifact-specific rules from config (constraints for AI, not to be included in output).
@@ -90,7 +97,12 @@ pub async fn instructions_command(
     artifact_id: Option<&str>,
     options: InstructionsOptions,
 ) -> anyhow::Result<()> {
-    let project_root = super::resolve_project_root(options.store.as_deref()).await?;
+    // Resolved here rather than through `resolve_project_root` so the store id
+    // survives: the JSON payload carries `planningHome`, whose `root` is what
+    // the schema instructions tell the agent to use instead of a repo-relative
+    // path. Same options and same implicit-root policy as before.
+    let root = crate::change::resolve_command_root(options.store.as_deref(), true)?;
+    let project_root = root.path.to_string_lossy().into_owned();
 
     let change_name = validate_change_exists(
         options.change.as_deref(),
@@ -103,7 +115,25 @@ pub async fn instructions_command(
     let id = match artifact_id {
         Some(id) => id.to_string(),
         None => {
-            anyhow::bail!("Missing required argument <artifact>");
+            // Listing the valid ids turns a guessed artifact into a one-shot
+            // correction instead of a retry loop.
+            let context = load_change_context(
+                Path::new(&project_root),
+                &change_name,
+                options.schema.as_deref(),
+                LoadChangeContextOptions { change_dir: None },
+            )
+            .map_err(|error| anyhow::anyhow!("Unable to load change instructions: {error}"))?;
+            let valid: Vec<String> = context
+                .graph
+                .get_all_artifacts()
+                .into_iter()
+                .map(|artifact| artifact.id.clone())
+                .collect();
+            anyhow::bail!(
+                "Missing required argument <artifact>. Valid artifacts:\n  {}",
+                valid.join("\n  ")
+            );
         }
     };
 
@@ -125,7 +155,30 @@ pub async fn instructions_command(
     let instructions = build_artifact_instructions(&id, &context, &project_root).await?;
 
     if options.json {
-        print_json(&instructions);
+        // `root` and `planningHome` join the payload because the artifact
+        // instructions point the agent at `planningHome.root` for store-aware
+        // reads of the main specs; emitting that instruction without the field
+        // would send the agent looking for a value only `status` carried.
+        let mut payload = serde_json::to_value(&instructions)?;
+        let object = payload
+            .as_object_mut()
+            .expect("artifact instructions serialize to an object");
+        let root_path = project_root.replace('\\', "/");
+        let default_schema = instructions.schema_name.clone();
+        object.insert(
+            "planningHome".to_string(),
+            serde_json::json!({
+                "kind": if root.store_id.is_some() { "store" } else { "repo" },
+                "root": root_path,
+                "changesDir": format!("{root_path}/speckit/changes"),
+                "defaultSchema": default_schema,
+            }),
+        );
+        object.insert(
+            "root".to_string(),
+            serde_json::to_value(to_root_output(&root))?,
+        );
+        print_json(&payload);
         return Ok(());
     }
 
@@ -141,8 +194,6 @@ async fn build_artifact_instructions(
 ) -> anyhow::Result<ArtifactInstructions> {
     let core_instructions = generate_core_instructions(context, artifact_id)
         .map_err(|error| anyhow::anyhow!("{error}"))?;
-    let fallback_artifact_id = core_instructions.artifact_id.clone();
-    let fallback_change_name = core_instructions.change_name.clone();
     let dependencies = core_instructions
         .dependencies
         .into_iter()
@@ -154,16 +205,22 @@ async fn build_artifact_instructions(
             skipped: dependency.skipped.unwrap_or(false),
         })
         .collect::<Vec<_>>();
-    let is_blocked = dependencies.iter().any(|dependency| !dependency.done);
-
     // Load project context
     let project_config = read_project_config(project_root);
     let core_project_config =
         speckit_core::project_config::read_project_config(Path::new(project_root));
     let core_artifact_id = core_instructions.artifact_id.clone();
-    let context = project_config
+    // Mirrors the OpenSpec side: the project's own `context:` text is the
+    // project context, and an empty or whitespace-only value is absence rather
+    // than an empty block. Synthesizing "Project root: <path>" here would put a
+    // path the payload already carries into the slot reserved for the user's
+    // background, and would silently displace whatever they actually wrote.
+    let context = core_project_config
         .as_ref()
-        .and_then(|_| Some(format!("Project root: {project_root}")));
+        .and_then(|config| config.context.as_deref())
+        .map(str::trim)
+        .filter(|text| !text.is_empty())
+        .map(str::to_owned);
 
     // Build references
     let registry = read_registry_snapshot().await;
@@ -191,16 +248,11 @@ async fn build_artifact_instructions(
             .to_string_lossy()
             .replace('\\', "/"),
         description: core_instructions.description,
-        instruction: if is_blocked {
-            "Complete the dependencies above before creating this artifact.".to_string()
-        } else {
-            core_instructions.instruction.unwrap_or_else(|| {
-                format!(
-                    "Create the {} artifact for change \"{}\".",
-                    fallback_artifact_id, fallback_change_name
-                )
-            })
-        },
+        // A blocked artifact keeps its real guidance: the `<warning>` above
+        // already says what is missing, and replacing the instruction would
+        // cost the agent the schema's own rules for the artifact it is about to
+        // write anyway.
+        instruction: core_instructions.instruction,
         context,
         rules: extract_rules_for_artifact(
             core_project_config.as_ref(),
@@ -284,18 +336,19 @@ fn prepend_create_time(template: &str) -> String {
 fn print_instructions_text(instructions: &ArtifactInstructions) {
     println!(
         "<artifact id=\"{}\" change=\"{}\" schema=\"{}\">",
-        instructions.artifact_id, instructions.change_name, instructions.schema_name
+        escape_envelope_attribute(&instructions.artifact_id),
+        escape_envelope_attribute(&instructions.change_name),
+        escape_envelope_attribute(&instructions.schema_name)
     );
     println!();
 
     if instructions.skipped {
+        let default_warning =
+            format!("This artifact is skipped (skip_specs is set in {METADATA_FILENAME}).");
         println!("<warning>");
         println!(
             "{}",
-            instructions
-                .warning
-                .as_deref()
-                .unwrap_or("This artifact is skipped.")
+            escape_envelope_tags(instructions.warning.as_deref().unwrap_or(&default_warning))
         );
         println!("</warning>");
         println!();
@@ -323,9 +376,10 @@ fn print_instructions_text(instructions: &ArtifactInstructions) {
     println!("<task>");
     println!(
         "Create the {} artifact for change \"{}\".",
-        instructions.artifact_id, instructions.change_name
+        escape_envelope_tags(&instructions.artifact_id),
+        escape_envelope_tags(&instructions.change_name)
     );
-    println!("{}", instructions.description);
+    println!("{}", escape_envelope_tags(&instructions.description));
     println!("</task>");
     println!();
 
@@ -334,7 +388,7 @@ fn print_instructions_text(instructions: &ArtifactInstructions) {
         println!(
             "<!-- This is background information for you. Do NOT include this in your output. -->"
         );
-        println!("{ctx}");
+        println!("{}", escape_envelope_tags(ctx));
         println!("</project_context>");
         println!();
     }
@@ -358,7 +412,16 @@ fn print_instructions_text(instructions: &ArtifactInstructions) {
                 "<!-- These are constraints for you to follow. Do NOT include this in your output. -->"
             );
             for rule in rules {
-                println!("- {rule}");
+                // Flattened so a newline cannot forge a sibling bullet, but
+                // never truncated: these are instructions an agent has to
+                // follow in full.
+                println!(
+                    "- {}",
+                    escape_envelope_tags(&speckit_core::references::sanitize_inline(
+                        rule,
+                        usize::MAX
+                    ))
+                );
             }
             println!("</rules>");
             println!();
@@ -367,24 +430,41 @@ fn print_instructions_text(instructions: &ArtifactInstructions) {
 
     if !instructions.dependencies.is_empty() {
         println!("<dependencies>");
-        println!("Read the current contents of these files before creating this artifact:");
+        println!(
+            "Read the current contents of these files before creating this artifact \
+             (re-read them from disk even if you saw them earlier - they may have been edited):"
+        );
         println!();
         for dep in &instructions.dependencies {
-            let status = if dep.skipped {
-                "skipped"
-            } else if dep.done {
-                "done"
-            } else {
-                "missing"
-            };
-            println!("<dependency id=\"{}\" status=\"{}\">", dep.id, status);
+            // A dependency satisfied via skip_specs has no files by design:
+            // telling the agent to read them (or calling them "done") would
+            // send it hunting for spec files that must not exist.
             if dep.skipped {
-                println!("  <description>Skipped: the change declares skip_specs.</description>");
-            } else {
-                let full_path = Path::new(&instructions.change_dir).join(&dep.path);
-                println!("  <path>{}</path>", full_path.display());
-                println!("  <description>{}</description>", dep.description);
+                println!(
+                    "<dependency id=\"{}\" status=\"skipped\">",
+                    escape_envelope_attribute(&dep.id)
+                );
+                println!(
+                    "  <description>Skipped: the change declares skip_specs, so this artifact has no files to read.</description>"
+                );
+                println!("</dependency>");
+                continue;
             }
+            let status = if dep.done { "done" } else { "missing" };
+            let full_path = Path::new(&instructions.change_dir).join(&dep.path);
+            println!(
+                "<dependency id=\"{}\" status=\"{}\">",
+                escape_envelope_attribute(&dep.id),
+                status
+            );
+            println!(
+                "  <path>{}</path>",
+                escape_envelope_attribute(&full_path.display().to_string())
+            );
+            println!(
+                "  <description>{}</description>",
+                escape_envelope_attribute(&dep.description)
+            );
             println!("</dependency>");
         }
         println!("</dependencies>");
@@ -392,21 +472,34 @@ fn print_instructions_text(instructions: &ArtifactInstructions) {
     }
 
     println!("<output>");
-    println!("Write to: {}", instructions.resolved_output_path);
+    println!(
+        "Write to: {}",
+        escape_envelope_attribute(&instructions.resolved_output_path)
+    );
     println!("</output>");
     println!();
 
-    if !instructions.instruction.is_empty() {
-        println!("<instruction>");
-        println!("{}", instructions.instruction.trim());
-        println!("</instruction>");
-        println!();
+    if let Some(ref instruction) = instructions.instruction {
+        if !instruction.trim().is_empty() {
+            println!("<instruction>");
+            println!("{}", escape_envelope_tags(instruction.trim()));
+            println!("</instruction>");
+            println!();
+        }
     }
 
     println!("<template>");
-    println!("<!-- Use this as the structure for your output file. -->");
-    println!("{}", instructions.template.trim());
+    println!("<!-- Use this as the structure for your output file. Fill in the sections. -->");
+    // Copied verbatim into the artifact file, so its `<!-- ... -->` comments and
+    // `<placeholder>` markers must survive - only the envelope's own closing
+    // tags are neutralized.
+    println!("{}", escape_envelope_tags(instructions.template.trim()));
     println!("</template>");
+    println!();
+
+    println!("<success_criteria>");
+    println!("<!-- To be defined in schema validation rules -->");
+    println!("</success_criteria>");
     println!();
 
     if !instructions.unlocks.is_empty() {
