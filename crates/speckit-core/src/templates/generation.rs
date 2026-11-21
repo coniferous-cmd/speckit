@@ -7,7 +7,6 @@
 //! Speckit template.
 
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
 
 /// Skill template with directory name and workflow ID mapping.
 ///
@@ -176,7 +175,10 @@ pub fn get_command_contents(
 ///
 /// `generated_by_version` is embedded as `metadata.generatedBy` so the version
 /// that produced the file can be detected later (used by update to decide
-/// whether to regenerate).
+/// whether to regenerate). `metadata.contentHash` is the SHA-256 of the
+/// emitted body (normalised like the parity fixtures); update compares it so
+/// a template edited between releases is still detected as stale even though
+/// `generatedBy` did not change.
 ///
 /// `transform_instructions` is applied to the template body before emission;
 /// the surface-specific generators use it to swap `/specx:*` -> `/speckit:*`
@@ -224,11 +226,37 @@ pub fn generate_skill_content(
         "  generatedBy: \"{}\"\n",
         escape_yaml_string(generated_by_version)
     ));
+    // The body is everything after the frontmatter: the instructions plus the
+    // trailing newline. Hash the body alone so the hash never depends on its
+    // own frontmatter field.
+    let body = format!("{instructions}\n");
+    out.push_str(&format!("  contentHash: \"{}\"\n", parity_hash(&body)));
     out.push_str("---\n");
     out.push('\n');
-    out.push_str(&instructions);
-    out.push('\n');
+    out.push_str(&body);
     out
+}
+
+/// The body of a generated skill file: everything after the closing
+/// frontmatter delimiter and the blank line that follows it. Returns `None`
+/// when the content has no frontmatter block.
+pub fn skill_body(content: &str) -> Option<&str> {
+    let rest = content.strip_prefix("---\n")?;
+    let end = rest.find("\n---\n")?;
+    Some(&rest[end + "\n---\n".len()..].trim_start_matches('\n'))
+}
+
+/// Whether an on-disk skill body still matches the `contentHash` recorded in
+/// its frontmatter. A file without a hash (generated before the field existed)
+/// is treated as mismatched so update regenerates it once.
+pub fn skill_body_matches_content_hash(content: &str) -> bool {
+    let Some(parsed) = parse_skill_frontmatter(content) else {
+        return false;
+    };
+    let Some(expected) = parsed.content_hash else {
+        return false;
+    };
+    skill_body(content).is_some_and(|body| parity_hash(body) == expected)
 }
 
 /// The `allowed-tools` frontmatter value emitted by Speckit.
@@ -279,6 +307,9 @@ pub struct ParsedSkillFrontmatter {
     pub name: String,
     pub generated_by: Option<String>,
     pub version: Option<String>,
+    /// SHA-256 of the body as emitted; absent on files generated before the
+    /// field existed.
+    pub content_hash: Option<String>,
 }
 
 /// Parses the YAML frontmatter from a generated `SKILL.md`.
@@ -294,6 +325,7 @@ pub fn parse_skill_frontmatter(content: &str) -> Option<ParsedSkillFrontmatter> 
     let mut name: Option<String> = None;
     let mut generated_by: Option<String> = None;
     let mut version: Option<String> = None;
+    let mut content_hash: Option<String> = None;
     let mut in_metadata = false;
 
     for line in fm.lines() {
@@ -321,6 +353,7 @@ pub fn parse_skill_frontmatter(content: &str) -> Option<ParsedSkillFrontmatter> 
         match k {
             "version" => version = Some(v.trim_matches('"').to_string()),
             "generatedBy" => generated_by = Some(v.trim_matches('"').to_string()),
+            "contentHash" => content_hash = Some(v.trim_matches('"').to_string()),
             _ => {}
         }
     }
@@ -329,6 +362,7 @@ pub fn parse_skill_frontmatter(content: &str) -> Option<ParsedSkillFrontmatter> 
         name: name?,
         generated_by,
         version,
+        content_hash,
     })
 }
 
@@ -396,70 +430,54 @@ pub fn parity_fixture_hashes() -> std::collections::HashMap<&'static str, &'stat
     let entries: [(&'static str, &'static str); 12] = [
         (
             "speckit-explore",
-            "111b8970e13913b44e74b2d0b06c2862354e532722d7e0deb927a9729988a0c2",
+            "f738d1e4b3408e2f9ecf69477afca671a09df07624528572d7a3ceb812fe4a4b",
         ),
         (
             "speckit-new-change",
-            "b911475ae55498b90c0adcb0fd66b23a1d3a5f36cd9c2762ae2b0b7971e3062a",
+            "88688af9b69fa72550f38e3a6ada1b0c5b7a0960266f84c3ea0e7849b07cd228",
         ),
         (
             "speckit-continue-change",
-            "58a69d1e96a3c549c04bbb2e7a5faa5ec961898bd6e8ef0a93aa879b41c2999a",
+            "f4629459e49df09c32ab67d346c61c941dad0c7d267d49ea454b562aab755970",
         ),
         (
             "speckit-implement-change",
-            "98f00a5fbb8378140ba587ff785cfadf51f2b71f219ddfa1f22613d14469132e",
+            "4c2c55e7cecf638aa04fabeccd22723bb9f0e78f61708667322948b7eca67bdc",
         ),
         (
             "speckit-update-change",
-            "8ff0b9f13e0e8cca8e7a4f84da89dbd0665a5e7dd0276201a2a430198e6c6a1a",
+            "ef85372b918075725718008d965f35e0fa39fc9aff36a3b7748d4f15df4577c2",
         ),
         (
             "speckit-ff-change",
-            "6edc7b161e59f3aa83b251076302bf4c2a1dfad951354a04db72c4b0077d8ce5",
+            "5dc37b2b3aef240c4c145d2380373eb806910de0d8552cc97f890909b8f12f5d",
         ),
         (
             "speckit-sync-specs",
-            "486ff6fcc653deb39bb780ad04a749dab66236a7ac1149b145cd440460bfe2af",
+            "c88a96f085171ccf6f730f81969a655b58b2e7e752ae9256b18e8c9d3cfb4281",
         ),
         (
             "speckit-archive-change",
-            "0aa194e93c8a70530812fce6023462e8ac62df98b6fe988a9452fcd24ce7895a",
+            "0cb1463497a1d9290522aee9d0e3b76e9c1884eb3f110f79f9d5b890c93cffbd",
         ),
         (
             "speckit-bulk-archive-change",
-            "1d4de3d2155fc1500a4bf560283200f7b2919bf3e6c30c405861dcb8a6453be7",
+            "1340731cc0a077f062b905806f72f2e3016b9c12a59161fe9b486d6d9040b78c",
         ),
         (
             "speckit-verify-change",
-            "fe222b197f0a9032d798dd19208071b0982dabea59cf06bf2a45729ad0c38954",
+            "f3abbf577980d64ab744203c0eb33f544b22db5912a6a6d528e0c7f1cb30df7b",
         ),
         (
             "speckit-onboard",
-            "00b605a147cf01b39da4935adf2c3e44dfd69d8f82e28245865c5bba65939bd5",
+            "e69687299337a210f46a052ecfd84c35bb121aff88826ab7a0f59f44a28868af",
         ),
         (
             "speckit-propose",
-            "72221f59e54708589137e706abf419f833ea01dc796fb08cad5cfe55f7e627fa",
+            "fa9f7e0d555ba0c36ede3ea888ef29133c03d7ecc7e6a9220bf2a3d7051a68b9",
         ),
     ];
     entries.into_iter().collect()
-}
-
-/// Build the frontmatter-only metadata block used to detect managed skills
-/// during update. The map is sorted alphabetically so its hash is stable.
-pub fn frontmatter_metadata_for_hash(
-    template: &super::types::SkillTemplate,
-) -> HashMap<String, String> {
-    let mut out: HashMap<String, String> = HashMap::new();
-    if let Some(m) = &template.metadata {
-        for (k, v) in m {
-            out.insert(k.clone(), v.clone());
-        }
-    }
-    out.insert("generatedBy".into(), speckit_generated_by_version());
-    out.insert("tool".into(), "speckit".into());
-    out
 }
 
 #[cfg(test)]
@@ -538,6 +556,32 @@ mod tests {
         assert_eq!(parsed.name, template.name);
         assert_eq!(parsed.generated_by.as_deref(), Some("1.9.0"));
         assert_eq!(parsed.version.as_deref(), Some("1.0"));
+        assert_eq!(
+            parsed.content_hash.as_deref(),
+            Some(parity_hash(&format!("{}\n", template.instructions)).as_str())
+        );
+        assert!(skill_body_matches_content_hash(&content));
+    }
+
+    #[test]
+    fn content_hash_tracks_the_body_not_the_version() {
+        let all = get_skill_templates(None);
+        let template = &all[0].template;
+        let a = generate_skill_content(template, "1.9.0", None);
+        let b = generate_skill_content(template, "2.0.0", None);
+        let ha = parse_skill_frontmatter(&a).unwrap().content_hash;
+        let hb = parse_skill_frontmatter(&b).unwrap().content_hash;
+        assert_eq!(ha, hb, "same body must hash the same across versions");
+
+        // A body edited under the same version is detected as mismatched.
+        let edited = a.replace("Enter explore mode.", "Enter explore mode. (edited)");
+        assert_ne!(edited, a);
+        assert!(!skill_body_matches_content_hash(&edited));
+
+        // A file from before the field existed is treated as mismatched.
+        let legacy = a.replace(&format!("  contentHash: \"{}\"\n", ha.unwrap()), "");
+        assert!(!skill_body_matches_content_hash(&legacy));
+        assert_eq!(skill_body(&legacy), skill_body(&a));
     }
 
     #[test]

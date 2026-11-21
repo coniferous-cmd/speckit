@@ -233,6 +233,7 @@ fn frontmatter_field_order_is_stable() {
         "  author:",
         "  version:",
         "  generatedBy:",
+        "  contentHash:",
     ] {
         let found = fm[pos..]
             .find(key)
@@ -393,6 +394,51 @@ fn update_skips_when_generated_by_matches_current_version() {
     assert!(
         !needs,
         "freshly generated skill must NOT need update when version matches"
+    );
+}
+
+#[test]
+fn update_regenerates_when_body_changed_under_same_version() {
+    use speckit_core::update::skill_needs_update_for_test;
+
+    let tmp = tempfile::tempdir().unwrap();
+    let version = speckit_generated_by_version();
+    let entries = get_skill_templates(None);
+    let template = &entries[0].template.clone();
+    let content = generate_skill_content(template, &version, None);
+
+    // A template edit between releases: same generatedBy, different body.
+    let edited = content.replacen("\n---\n\n", "\n---\n\nEdited guidance.\n", 1);
+    assert_ne!(edited, content);
+    let skill_file = tmp.path().join("SKILL.md");
+    std::fs::write(&skill_file, &edited).unwrap();
+    assert!(
+        skill_needs_update_for_test(
+            &skill_file,
+            &template.name,
+            &entries[0].workflow_id,
+            &version
+        )
+        .unwrap(),
+        "a body edited under the same version must need update"
+    );
+
+    // A file emitted before contentHash existed is regenerated once.
+    let hash_line = content
+        .lines()
+        .find(|l| l.starts_with("  contentHash:"))
+        .unwrap();
+    let legacy = content.replace(&format!("{hash_line}\n"), "");
+    std::fs::write(&skill_file, &legacy).unwrap();
+    assert!(
+        skill_needs_update_for_test(
+            &skill_file,
+            &template.name,
+            &entries[0].workflow_id,
+            &version
+        )
+        .unwrap(),
+        "a pre-contentHash file must need update"
     );
 }
 
