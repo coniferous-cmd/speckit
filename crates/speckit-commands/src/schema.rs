@@ -437,7 +437,13 @@ pub async fn schema_init(
     std::fs::create_dir_all(&templates_dir)?;
     for artifact_id in &artifact_ids {
         let template_content = create_default_template(artifact_id);
-        let template_path = templates_dir.join(format!("{artifact_id}.md"));
+        // Write where the YAML says it lives, including a nested template path,
+        // so a created schema never references a file it did not produce.
+        let (_, template, _) = artifact_layout(artifact_id);
+        let template_path = templates_dir.join(template);
+        if let Some(parent) = template_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
         std::fs::write(&template_path, template_content)?;
     }
 
@@ -648,21 +654,53 @@ fn validate_schema_dir(schema_dir: &str, verbose: bool) -> (bool, Vec<SchemaVali
     (issues.is_empty(), issues)
 }
 
+/// What a built-in artifact ID generates, which template backs it, and how the
+/// schema describes it.
+///
+/// The three are decided together because a created schema must reference a
+/// template file the same command actually wrote. Enumerating them separately
+/// is how `specs` ended up declaring `specs/spec.md` while the writer put the
+/// file at `specs.md`, leaving every schema produced by `schema new` pointing
+/// its specs artifact at a file that does not exist.
+fn artifact_layout(id: &str) -> (&'static str, &'static str, &'static str) {
+    match id {
+        "proposal" => (
+            "proposal.md",
+            "proposal.md",
+            "Initial proposal document outlining the change",
+        ),
+        "specs" => (
+            "specs/**/*.md",
+            "specs.md",
+            "Detailed specifications for the change",
+        ),
+        "design" => (
+            "design.md",
+            "design.md",
+            "Technical design document with implementation details",
+        ),
+        "tasks" => (
+            "tasks.md",
+            "tasks.md",
+            "Implementation checklist with trackable tasks",
+        ),
+        _ => ("unknown", "unknown", "Unknown artifact"),
+    }
+}
+
 /// Build schema YAML content.
 fn build_schema_yaml(name: &str, description: &str, artifact_ids: &[String]) -> String {
     let mut yaml =
         format!("name: {name}\nversion: 1\ndescription: \"{description}\"\nartifacts:\n");
 
     for id in artifact_ids {
-        let (generates, template) = match id.as_str() {
-            "proposal" => ("proposal.md", "proposal.md"),
-            "specs" => ("specs/**/*.md", "specs/spec.md"),
-            "design" => ("design.md", "design.md"),
-            "tasks" => ("tasks.md", "tasks.md"),
-            _ => ("unknown", "unknown"),
-        };
+        let (generates, template, artifact_description) = artifact_layout(id);
+        // `description` is a required field on the schema model, so omitting it
+        // here would make every created schema fail to load. Prose carries
+        // colons, so the value must stay quoted.
         yaml.push_str(&format!(
-            "  - id: {id}\n    generates: {generates}\n    template: {template}\n    requires: []\n"
+            "  - id: {id}\n    generates: {generates}\n    description: \
+             \"{artifact_description}\"\n    template: {template}\n    requires: []\n"
         ));
     }
 
@@ -675,7 +713,7 @@ fn build_schema_yaml(name: &str, description: &str, artifact_ids: &[String]) -> 
 
 #[cfg(test)]
 mod tests {
-    use super::build_schema_yaml;
+    use super::{artifact_layout, build_schema_yaml};
 
     #[test]
     fn generated_schema_uses_implement_phase() {
@@ -683,6 +721,45 @@ mod tests {
 
         assert!(yaml.contains("implement:\n"));
         assert!(!yaml.contains("apply:"));
+    }
+
+    /// A created schema is only usable if every `template:` it declares names a
+    /// file the same command wrote, and it parses at all only if every artifact
+    /// carries the required `description`.
+    #[test]
+    fn generated_schema_declares_every_field_the_loader_requires() {
+        let ids: Vec<String> = ["proposal", "specs", "design", "tasks"]
+            .map(str::to_string)
+            .to_vec();
+        let yaml = build_schema_yaml("custom", "A custom schema", &ids);
+
+        for id in &ids {
+            let (generates, template, description) = artifact_layout(id);
+            assert!(
+                yaml.contains(&format!("  - id: {id}\n")),
+                "artifact {id} missing from generated YAML"
+            );
+            assert!(
+                yaml.contains(&format!("    description: \"{description}\"\n")),
+                "artifact {id} missing its required description"
+            );
+            assert!(yaml.contains(&format!("    generates: {generates}\n")));
+            assert!(yaml.contains(&format!("    template: {template}\n")));
+        }
+    }
+
+    /// The `specs` template used to be declared at `specs/spec.md` while the
+    /// writer produced `specs.md`, so every `schema new` shipped a dangling
+    /// reference. Both sides must still agree.
+    #[test]
+    fn specs_template_path_matches_the_file_the_writer_produces() {
+        let (_, template, _) = artifact_layout("specs");
+        let yaml = build_schema_yaml("custom", "A custom schema", &["specs".to_string()]);
+
+        assert!(
+            yaml.contains(&format!("    template: {template}\n")),
+            "YAML and the writer disagree about where the specs template lives"
+        );
     }
 }
 
