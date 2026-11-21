@@ -10,6 +10,7 @@ use crate::store::errors::{StoreDiagnostic, StoreDiagnosticSeverity, make_store_
 
 /// Health status of the root, store, and references.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RelationshipHealth {
     pub root: RootHealth,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -20,6 +21,7 @@ pub struct RelationshipHealth {
 
 /// Root health information.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RootHealth {
     pub path: String,
     pub source: String,
@@ -31,6 +33,7 @@ pub struct RootHealth {
 
 /// Store health information.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct StoreHealth {
     pub id: String,
     pub metadata: StoreMetadata,
@@ -43,6 +46,7 @@ pub struct StoreHealth {
 
 /// Store metadata facts.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct StoreMetadata {
     pub present: bool,
     pub valid: bool,
@@ -52,6 +56,7 @@ pub struct StoreMetadata {
 
 /// Store drift (ahead/behind counts).
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct StoreDrift {
     pub ahead: usize,
     pub behind: usize,

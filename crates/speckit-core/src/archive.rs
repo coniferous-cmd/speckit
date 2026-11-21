@@ -34,6 +34,7 @@ pub struct ArchiveOptions {
 
 /// Result of an archive operation.
 #[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ArchiveResult {
     pub change: String,
     pub archived_as: String,
@@ -47,6 +48,7 @@ pub struct ArchiveResult {
 
 /// Spec update totals.
 #[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SpecTotals {
     pub added: usize,
     pub modified: usize,

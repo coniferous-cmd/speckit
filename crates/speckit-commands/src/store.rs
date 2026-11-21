@@ -33,13 +33,13 @@ fn finish<T>(result: Result<T, StoreError>, json: bool, mut empty: Value) -> any
 fn info(store: &core::StoreInfo) -> Value {
     let mut value = json!({ "id": store.id, "root": store.root });
     if let Some(path) = &store.metadata_path {
-        value["metadata_path"] = json!(path);
+        value["metadataPath"] = json!(path);
     }
     value
 }
 
 fn mutation_empty() -> Value {
-    json!({ "store": null, "registry": null, "git": null, "created_files": [], "status": [] })
+    json!({ "store": null, "registry": null, "git": null, "createdFiles": [], "status": [] })
 }
 
 fn cleanup_empty() -> Value {
@@ -53,14 +53,14 @@ fn print_mutation(result: &core::StoreMutationResult, json: bool, title: &str) {
             "registry": {
                 "path": result.registry_commit.path,
                 "registered": result.registry_commit.registered,
-                "already_registered": result.registry_commit.already_registered,
+                "alreadyRegistered": result.registry_commit.already_registered,
             },
             "git": {
-                "is_repository": result.git.is_repository,
+                "isRepository": result.git.is_repository,
                 "initialized": result.git.initialized,
                 "committed": result.git.committed,
             },
-            "created_files": result.created_artifacts,
+            "createdFiles": result.created_artifacts,
             "status": result.diagnostics,
         }));
     } else {
@@ -79,8 +79,8 @@ fn print_cleanup(result: &core::StoreCleanupResult, json: bool, title: &str) {
             "registry": { "path": result.registry_commit.path, "removed": result.registry_commit.removed },
             "files": {
                 "deleted": result.files.deleted,
-                "deleted_path": result.files.deleted_path,
-                "left_on_disk": result.files.left_on_disk,
+                "deletedPath": result.files.deleted_path,
+                "leftOnDisk": result.files.left_on_disk,
             },
             "status": result.diagnostics,
         }));
@@ -228,8 +228,8 @@ pub async fn store_doctor(id: Option<&str>, json: bool) -> anyhow::Result<()> {
                 json!({
                     "id": store.id,
                     "root": store.root,
-                    "metadata_path": store.metadata_path,
-                    "speckit_root": {
+                    "metadataPath": store.metadata_path,
+                    "speckitRoot": {
                         "present": store.speckit_root.present,
                         "healthy": store.speckit_root.healthy,
                         "config": store.speckit_root.config,
@@ -245,11 +245,11 @@ pub async fn store_doctor(id: Option<&str>, json: bool) -> anyhow::Result<()> {
                         "remote": store.metadata.remote,
                     },
                     "git": {
-                        "is_repository": store.git.is_repository,
-                        "has_commits": store.git.has_commits,
-                        "has_uncommitted_changes": store.git.has_uncommitted_changes,
-                        "has_remote": store.git.has_remote,
-                        "origin_url": store.git.origin_url,
+                        "isRepository": store.git.is_repository,
+                        "hasCommits": store.git.has_commits,
+                        "hasUncommittedChanges": store.git.has_uncommitted_changes,
+                        "hasRemote": store.git.has_remote,
+                        "originUrl": store.git.origin_url,
                     },
                     "status": store.diagnostics,
                 })

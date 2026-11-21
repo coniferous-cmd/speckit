@@ -10,6 +10,7 @@ use crate::workflow::shared::{get_schema_dir, list_schemas};
 
 /// A schema location for output.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SchemaResolution {
     pub name: String,
     pub source: String,
@@ -20,6 +21,7 @@ pub struct SchemaResolution {
 
 /// A shadowed schema location.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SchemaShadow {
     pub source: String,
     pub path: String,
@@ -27,6 +29,7 @@ pub struct SchemaShadow {
 
 /// Validation issue for schemas.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SchemaValidationIssue {
     pub level: String,
     pub path: String,

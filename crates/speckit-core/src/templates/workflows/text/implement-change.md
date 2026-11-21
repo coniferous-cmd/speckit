@@ -23,8 +23,8 @@ Implement tasks from a Speckit change.
    speckit status --change "<name>" --json
    ```
    Parse the JSON to understand:
-   - `schema_name`: The workflow being used (e.g., "spec-driven")
-   - `planningHome` and `change_root`: the planning root and change directory
+   - `schemaName`: The workflow being used (e.g., "spec-driven")
+   - `planningHome` and `changeRoot`: the planning root and change directory
    - `actionContext.allowedEditRoots` and `actionContext.constraints`: where planning and code edits go. If a store is selected and no implementation repository can be determined, ask the user which repository to edit before changing code.
    - Which artifact contains the tasks (typically "tasks" for spec-driven, check status for others)
 
@@ -35,14 +35,14 @@ Implement tasks from a Speckit change.
    ```
 
    This returns:
-   - `context_files`: artifact ID -> array of concrete file paths (varies by schema - could be proposal/specs/design/tasks or spec/tests/implementation/docs)
+   - `contextFiles`: artifact ID -> array of concrete file paths (varies by schema - could be proposal/specs/design/tasks or spec/tests/implementation/docs)
    - Progress (total, complete, remaining)
    - Task list with status, `sourcePath`, and one-based `line`
    - `taskTrackingConfigured`: whether the schema uses a task checklist
    - Dynamic instruction based on current state
    - Optional `context`: current required project instruction input from the selected root
-   - Optional `operation_guidance`: current advisory guidance for implement
-   - Optional `missing_artifacts`, `missingPrerequisites`, `warnings`, and `unavailableTrackingFiles`
+   - Optional `operationGuidance`: current advisory guidance for implement
+   - Optional `missingArtifacts`, `missingPrerequisites`, `warnings`, and `unavailableTrackingFiles`
 
    **Handle states:**
    - If `state: "blocked"`: show the CLI message and pause implementation. If artifacts are missing, show the missing artifacts and recovery step from `instruction`. Otherwise follow the CLI guidance to repair the configured tracking files from the existing planning artifacts. Keep the selected store on follow-up commands.
@@ -51,12 +51,12 @@ Implement tasks from a Speckit change.
 
    Treat `context` as a required prompt-level input. Read and consider it, and
    apply relevant project facts, conventions, and constraints while implementing.
-   Treat `operation_guidance` as optional additive advice. Read and consider every
+   Treat `operationGuidance` as optional additive advice. Read and consider every
    entry, and follow entries that are applicable and compatible with the built-in
    workflow.
 
    Keep both fields separate from CLI-returned state, missing artifacts, tasks,
-   progress, `context_files`, and the built-in `instruction`. They are not
+   progress, `contextFiles`, and the built-in `instruction`. They are not
    evidence of task completion, do not replace the built-in instruction, and do
    not permit bypassing a blocked state. If context conflicts with the built-in
    instruction, an explicit user choice, or a CLI-controlled value, report the
@@ -66,12 +66,12 @@ Implement tasks from a Speckit change.
 
 4. **Read context files**
 
-   Read every file path listed under `context_files` from the implement instructions output.
+   Read every file path listed under `contextFiles` from the implement instructions output.
    The files depend on the schema being used:
    - **spec-driven**: proposal, specs, design, tasks
-   - Other schemas: follow the `context_files` from CLI output
+   - Other schemas: follow the `contextFiles` from CLI output
 
-   Do not copy `context` or `operation_guidance` verbatim into implementation
+   Do not copy `context` or `operationGuidance` verbatim into implementation
    files or planning artifacts unless the user separately asks for that content.
 
 5. **Show current progress**
@@ -169,7 +169,7 @@ What would you like to do?
 - Pause on errors, blockers, or unclear requirements - don't guess
 - When a task needs work beyond what the spec describes, surface the added scope and pause - never silently narrow, defer, or simplify away specified behavior
 - Only mark a task `- [x]` when its specified behavior is fully implemented, not when it is partially done or deferred
-- Use `context_files` from CLI output. Update each checkbox at its reported `sourcePath` and `line`.
+- Use `contextFiles` from CLI output. Update each checkbox at its reported `sourcePath` and `line`.
 - Do not use context or operation guidance as proof that a task is complete
 - Apply relevant project context; report conflicts with controlling workflow inputs
 - Consider every guidance entry; explain any inapplicable or conflicting advice

@@ -39,6 +39,7 @@ pub struct ChangeValidateOptions {
 
 /// A change entry for list output.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ChangeListEntry {
     pub id: String,
     pub title: String,
@@ -49,6 +50,7 @@ pub struct ChangeListEntry {
 
 /// Task progress information.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TaskStatus {
     pub total: usize,
     pub completed: usize,
@@ -56,6 +58,7 @@ pub struct TaskStatus {
 
 /// Validation report for a change.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ChangeValidationReport {
     pub valid: bool,
     pub issues: Vec<ValidationIssue>,
@@ -63,6 +66,7 @@ pub struct ChangeValidationReport {
 
 /// A validation issue.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ValidationIssue {
     pub level: String,
     pub path: String,
@@ -154,7 +158,7 @@ pub async fn change_show(
         let output = serde_json::json!({
             "id": name,
             "title": title,
-            "delta_count": deltas.len(),
+            "deltaCount": deltas.len(),
             "deltas": if options.deltas_only { deltas } else { deltas },
         });
         crate::shared_output::print_json(&output);

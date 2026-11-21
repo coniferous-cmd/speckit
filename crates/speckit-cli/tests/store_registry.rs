@@ -64,13 +64,13 @@ fn register_list_context_and_unregister_share_registry() {
     let listed = success(home, &["store", "list", "--json"]);
     assert_eq!(listed["stores"][0]["root"], registered["store"]["root"]);
     let context = success(home, &["context", "--json", "--store", "team"]);
-    assert_eq!(context["root"]["store_id"], "team");
+    assert_eq!(context["root"]["storeId"], "team");
     assert_eq!(context["root"]["path"], registered["store"]["root"]);
     let rerun = success(home, &["store", "register", &root, "--json"]);
-    assert_eq!(rerun["registry"]["already_registered"], true);
+    assert_eq!(rerun["registry"]["alreadyRegistered"], true);
     let doctor = success(home, &["store", "doctor", "team", "--json"]);
     assert_eq!(doctor["stores"][0]["metadata"]["valid"], true);
-    assert_eq!(doctor["stores"][0]["speckit_root"]["healthy"], true);
+    assert_eq!(doctor["stores"][0]["speckitRoot"]["healthy"], true);
     success(home, &["store", "unregister", "team", "--json"]);
     assert!(Path::new(&root).is_dir());
     assert_eq!(
@@ -135,7 +135,7 @@ fn legacy_registration_can_be_explicitly_reregistered_without_overwriting_old_fi
         ],
     );
     assert_eq!(
-        success(home, &["context", "--store", "custom-id", "--json"])["root"]["store_id"],
+        success(home, &["context", "--store", "custom-id", "--json"])["root"]["storeId"],
         "custom-id"
     );
     assert_eq!(std::fs::read_to_string(registry).unwrap(), legacy);
@@ -158,7 +158,7 @@ fn setup_is_visible_to_context() {
         ],
     );
     let context = success(temp.path(), &["context", "--store", "team", "--json"]);
-    assert_eq!(context["root"]["store_id"], "team");
+    assert_eq!(context["root"]["storeId"], "team");
 }
 
 #[test]

@@ -48,6 +48,7 @@ pub struct ReferenceDeclaration {
 
 /// An entry in the assembled reference index (resolved from declarations + registry).
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ReferenceIndexEntry {
     pub store_id: String,
     pub root: Option<String>,
@@ -60,6 +61,7 @@ pub struct ReferenceIndexEntry {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ReferenceSpecEntry {
     pub id: String,
     pub summary: String,
@@ -67,6 +69,7 @@ pub struct ReferenceSpecEntry {
 
 /// Inspection result of an Speckit root directory.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SpeckitRootInspection {
     pub healthy: bool,
     pub diagnostics: Vec<StoreDiagnostic>,

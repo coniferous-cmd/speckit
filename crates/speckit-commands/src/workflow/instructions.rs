@@ -47,6 +47,7 @@ pub type ArchiveInstructionsOptions = InstructionsOptions;
 
 /// Rich instructions for creating a single artifact.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ArtifactInstructions {
     pub artifact_id: String,
     pub change_name: String,
@@ -79,6 +80,7 @@ pub struct ArtifactInstructions {
 
 /// Information about a dependency artifact.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DependencyInfo {
     pub id: String,
     pub path: String,

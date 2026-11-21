@@ -18,6 +18,7 @@ const ROLE_SPECKIT_ROOT: &str = "speckit_root";
 
 /// A single member of a working set -- one referenced store.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct WorkingSetMember {
     pub role: String,
     pub id: String,
@@ -33,6 +34,7 @@ pub struct WorkingSetMember {
 
 /// Root descriptor carried inside a [`WorkingSet`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct WorkingSetRoot {
     pub path: String,
     pub source: String,
@@ -44,6 +46,7 @@ pub struct WorkingSetRoot {
 /// The assembled working set: root plus referenced-store members and
 /// top-level status diagnostics.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct WorkingSet {
     pub root: WorkingSetRoot,
     pub members: Vec<WorkingSetMember>,

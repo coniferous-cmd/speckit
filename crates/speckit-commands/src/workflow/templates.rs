@@ -21,6 +21,7 @@ pub struct TemplatesOptions {
 
 /// Information about a single template.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TemplateInfo {
     pub artifact_id: String,
     pub template_path: String,

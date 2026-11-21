@@ -24,6 +24,7 @@ pub struct NewChangeOptions {
 
 /// Output payload for a newly created change.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct NewChangeOutput {
     pub change: Option<ChangeInfo>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -32,6 +33,7 @@ pub struct NewChangeOutput {
 
 /// Information about the created change.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ChangeInfo {
     pub id: String,
     pub path: String,

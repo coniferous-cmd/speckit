@@ -13,6 +13,7 @@ const MAX_RENDERED_INDEX_SIZE: usize = 50 * 1024;
 
 /// A single spec entry in a referenced store index.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ReferenceSpecEntry {
     pub id: String,
     pub summary: String,
@@ -20,6 +21,7 @@ pub struct ReferenceSpecEntry {
 
 /// A diagnostic entry for store status reporting.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct StoreDiagnostic {
     pub severity: String,
     pub code: String,
@@ -32,6 +34,7 @@ pub struct StoreDiagnostic {
 
 /// An entry in the referenced-store index.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ReferenceIndexEntry {
     pub store_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]

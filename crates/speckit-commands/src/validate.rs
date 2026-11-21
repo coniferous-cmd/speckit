@@ -26,6 +26,7 @@ pub struct ValidateOptions {
 
 /// A single bulk validation result.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BulkItemResult {
     pub id: String,
     #[serde(rename = "type")]
@@ -37,6 +38,7 @@ pub struct BulkItemResult {
 
 /// A validation issue.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ValidationIssue {
     pub level: String,
     pub path: String,
@@ -45,6 +47,7 @@ pub struct ValidationIssue {
 
 /// Summary statistics for validation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ValidationSummary {
     pub totals: SummaryTotals,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -52,6 +55,7 @@ pub struct ValidationSummary {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SummaryTotals {
     pub items: usize,
     pub passed: usize,
@@ -60,6 +64,7 @@ pub struct SummaryTotals {
 
 /// Full validation output.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ValidateOutput {
     pub items: Vec<BulkItemResult>,
     pub summary: ValidationSummary,

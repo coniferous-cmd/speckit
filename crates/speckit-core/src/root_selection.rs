@@ -68,6 +68,7 @@ pub struct ResolvedSpeckitRoot {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RootOutput {
     pub path: PathBuf,
     pub source: SpeckitRootSource,

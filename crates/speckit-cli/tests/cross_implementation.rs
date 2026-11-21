@@ -206,7 +206,7 @@ fn change_lifecycle_json_contract_is_available_from_nested_directory() {
         &["status", "--change", "cli-lifecycle", "--json"],
     );
     let status_json = json_stdout(&status);
-    assert_eq!(status_json["change_name"], "cli-lifecycle");
+    assert_eq!(status_json["changeName"], "cli-lifecycle");
     assert_eq!(status_json["artifacts"][0]["id"], "proposal");
     assert_eq!(status_json["artifacts"][0]["status"], "ready");
 
@@ -223,10 +223,10 @@ fn change_lifecycle_json_contract_is_available_from_nested_directory() {
         ],
     );
     let instructions_json = json_stdout(&instructions);
-    assert_eq!(instructions_json["artifact_id"], "proposal");
-    assert_eq!(instructions_json["change_name"], "cli-lifecycle");
+    assert_eq!(instructions_json["artifactId"], "proposal");
+    assert_eq!(instructions_json["changeName"], "cli-lifecycle");
     assert!(
-        instructions_json["resolved_output_path"]
+        instructions_json["resolvedOutputPath"]
             .as_str()
             .unwrap()
             .ends_with("cli-lifecycle/proposal.md")
@@ -299,7 +299,7 @@ fn implement_cli_contract_and_legacy_config() {
     assert_eq!(ready_json["progress"]["remaining"], 1);
     assert_eq!(ready_json["context"], "Keep project context.");
     assert_eq!(
-        ready_json["operation_guidance"],
+        ready_json["operationGuidance"],
         serde_json::json!(["Keep operation guidance."])
     );
     assert!(ready_json.get("useWorktree").is_none());
@@ -472,7 +472,7 @@ fn implement_uses_the_declaring_project_and_the_selected_store() {
     ];
     let blocked = json_stdout(&run_cli(&nested, &config_home, &data_home, &args));
     assert_eq!(blocked["state"], "blocked");
-    assert_eq!(blocked["missing_artifacts"], serde_json::json!(["tasks"]));
+    assert_eq!(blocked["missingArtifacts"], serde_json::json!(["tasks"]));
     let prerequisites = blocked["missingPrerequisites"].as_array().unwrap();
     assert_eq!(prerequisites.first().unwrap(), "proposal");
     assert_eq!(prerequisites.last().unwrap(), "tasks");
@@ -504,7 +504,7 @@ fn implement_uses_the_declaring_project_and_the_selected_store() {
         &["list", "--store", "plans", "--json"],
     ));
     assert_eq!(
-        listed[0]["task_status"],
+        listed[0]["taskStatus"],
         serde_json::json!({"total": 2, "completed": 1})
     );
 
@@ -551,7 +551,7 @@ fn implement_uses_schema_tracking_patterns_and_returns_exact_task_locations() {
 
     let no_phase = run();
     assert_eq!(no_phase["state"], "blocked");
-    assert_eq!(no_phase["missing_artifacts"], serde_json::json!(["plan"]));
+    assert_eq!(no_phase["missingArtifacts"], serde_json::json!(["plan"]));
     std::fs::write(change_dir.join("plan.md"), "# Plan\n").unwrap();
     let no_tracking = run();
     assert_eq!(no_tracking["state"], "ready");
@@ -593,7 +593,7 @@ fn implement_uses_schema_tracking_patterns_and_returns_exact_task_locations() {
         &["list", "--json"],
     ));
     assert_eq!(
-        listed[0]["task_status"],
+        listed[0]["taskStatus"],
         serde_json::json!({"total": 4, "completed": 1})
     );
 }
@@ -628,7 +628,7 @@ fn init_and_update_generate_implement_surfaces_for_each_delivery_mode() {
             .unwrap();
     assert!(skill.contains("rerun this workflow with its name"));
     assert!(!skill.contains("/speckit:implement"));
-    assert!(skill.contains("`context_files`"));
+    assert!(skill.contains("`contextFiles`"));
     assert!(skill.contains("`sourcePath` and `line`"));
 
     std::fs::write(&global_config, r#"{"delivery":"commands"}"#).unwrap();
@@ -779,7 +779,7 @@ fn status_marks_specs_skipped_when_change_metadata_requests_it() {
     let json = json_stdout(&output);
     assert_eq!(json["artifacts"][1]["id"], "specs");
     assert_eq!(json["artifacts"][1]["status"], "skipped");
-    assert_eq!(json["is_planning_complete"], true);
+    assert_eq!(json["isPlanningComplete"], true);
 }
 
 #[test]

@@ -10,6 +10,7 @@ use crate::shared_output::print_json;
 
 /// Health report for the Speckit root.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RelationshipHealth {
     pub root: RootHealth,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -20,6 +21,7 @@ pub struct RelationshipHealth {
 
 /// Root health information.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RootHealth {
     pub path: String,
     pub healthy: bool,
@@ -28,6 +30,7 @@ pub struct RootHealth {
 
 /// Store health information.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct StoreHealth {
     pub id: String,
     pub metadata: MetadataHealth,
@@ -36,12 +39,14 @@ pub struct StoreHealth {
 
 /// Metadata health.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MetadataHealth {
     pub valid: bool,
 }
 
 /// Reference health information.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ReferenceHealth {
     pub store_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]

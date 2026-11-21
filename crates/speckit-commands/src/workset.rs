@@ -10,6 +10,7 @@ use crate::shared_output::{emit_failure, print_json};
 
 /// A workset definition.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Workset {
     pub name: String,
     pub members: Vec<WorksetMember>,
@@ -19,6 +20,7 @@ pub struct Workset {
 
 /// A workset member.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct WorksetMember {
     pub name: String,
     pub path: String,

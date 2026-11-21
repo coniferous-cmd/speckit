@@ -33,6 +33,7 @@ pub struct SpecValidateOptions {
 
 /// A parsed spec for JSON output.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SpecOutput {
     pub id: String,
     pub title: String,
@@ -44,6 +45,7 @@ pub struct SpecOutput {
 
 /// A requirement in a spec.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RequirementOutput {
     pub text: String,
     pub scenarios: Vec<ScenarioOutput>,
@@ -51,6 +53,7 @@ pub struct RequirementOutput {
 
 /// A scenario in a requirement.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ScenarioOutput {
     pub text: String,
 }
@@ -64,6 +67,7 @@ pub struct SpecMetadata {
 
 /// A spec entry for list output.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SpecListEntry {
     pub id: String,
     pub title: String,
@@ -72,6 +76,7 @@ pub struct SpecListEntry {
 
 /// Validation report for a spec.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SpecValidationReport {
     pub valid: bool,
     pub issues: Vec<ValidationIssue>,
@@ -79,6 +84,7 @@ pub struct SpecValidationReport {
 
 /// A validation issue.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ValidationIssue {
     pub level: String,
     pub path: String,
@@ -180,7 +186,7 @@ pub async fn spec_show(
             "id": id,
             "title": parsed.title,
             "overview": parsed.overview,
-            "requirement_count": filtered.len(),
+            "requirementCount": filtered.len(),
             "requirements": filtered,
             "metadata": parsed.metadata,
         });

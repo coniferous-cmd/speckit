@@ -27,6 +27,7 @@ pub struct StatusOptions {
 
 /// Artifact status entry for display.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ArtifactStatusEntry {
     pub id: String,
     pub status: String,
@@ -36,6 +37,7 @@ pub struct ArtifactStatusEntry {
 
 /// The full change status for output.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ChangeStatusOutput {
     pub change_name: String,
     pub schema_name: String,
@@ -44,7 +46,6 @@ pub struct ChangeStatusOutput {
     pub artifacts: Vec<ArtifactStatusEntry>,
     pub is_planning_complete: bool,
     /// Artifact IDs required before the implementation phase can start.
-    #[serde(rename = "implementRequires")]
     pub implement_requires: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub root: Option<serde_json::Value>,

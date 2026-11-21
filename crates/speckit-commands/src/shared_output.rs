@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 
 /// A diagnostic entry in the store/status envelope.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct StoreDiagnostic {
     pub severity: String,
     pub code: String,

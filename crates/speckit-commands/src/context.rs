@@ -11,6 +11,7 @@ use crate::shared_output::{StoreDiagnostic, print_json};
 
 /// Working set: the complete context for a root.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct WorkingSet {
     pub root: WorkingSetRoot,
     pub members: Vec<WorkingSetMember>,
@@ -19,6 +20,7 @@ pub struct WorkingSet {
 
 /// The root of the working set.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct WorkingSetRoot {
     pub path: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -27,6 +29,7 @@ pub struct WorkingSetRoot {
 
 /// A member of the working set.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct WorkingSetMember {
     pub id: String,
     pub path: String,

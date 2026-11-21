@@ -21,6 +21,7 @@ pub struct SchemasOptions {
 
 /// Information about a single schema.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SchemaInfo {
     pub name: String,
     pub description: String,

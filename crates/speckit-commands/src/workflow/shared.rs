@@ -15,6 +15,7 @@ use crate::shared_gather::ReferenceIndexEntry;
 
 /// A status entry for change/workflow commands.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ChangeCommandStatus {
     pub severity: String,
     pub code: String,
@@ -27,16 +28,17 @@ pub struct ChangeCommandStatus {
 
 /// A single task item from a tasks.md file.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TaskItem {
     pub id: String,
     pub description: String,
     pub done: bool,
-    #[serde(rename = "sourcePath")]
     pub source_path: String,
     pub line: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UnavailableTrackingFile {
     pub path: String,
     pub reason: String,
@@ -44,6 +46,7 @@ pub struct UnavailableTrackingFile {
 
 /// Instructions for implementing a change's tasks.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ImplementInstructions {
     pub change_name: String,
     pub change_dir: String,
@@ -51,17 +54,13 @@ pub struct ImplementInstructions {
     pub context_files: std::collections::HashMap<String, Vec<String>>,
     pub progress: ImplementProgress,
     pub tasks: Vec<TaskItem>,
-    #[serde(rename = "taskTrackingConfigured")]
     pub task_tracking_configured: bool,
-    #[serde(
-        rename = "unavailableTrackingFiles",
-        skip_serializing_if = "Vec::is_empty"
-    )]
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub unavailable_tracking_files: Vec<UnavailableTrackingFile>,
     pub state: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub missing_artifacts: Option<Vec<String>>,
-    #[serde(rename = "missingPrerequisites", skip_serializing_if = "Vec::is_empty")]
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub missing_prerequisites: Vec<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub warnings: Vec<String>,
@@ -76,6 +75,7 @@ pub struct ImplementInstructions {
 
 /// Progress tracking for implement instructions.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ImplementProgress {
     pub total: usize,
     pub complete: usize,
@@ -84,6 +84,7 @@ pub struct ImplementProgress {
 
 /// Instructions for archiving a change.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ArchiveInstructions {
     pub change_name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
