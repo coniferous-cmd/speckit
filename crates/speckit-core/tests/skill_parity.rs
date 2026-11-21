@@ -626,47 +626,6 @@ fn implement_instructions_match_implement_skill_body() {
 }
 
 #[test]
-fn implement_workspace_preparation_precedes_context_and_edits() {
-    let template = workflows::get_implement_change_skill_template();
-    let body = &template.instructions;
-    let states = body.find("**Handle states:**").unwrap();
-    let workspace = body
-        .find("**Prepare the implementation workspace when requested**")
-        .unwrap();
-    let context = body.find("**Read context files**").unwrap();
-    let edits = body
-        .find("**Implement tasks (loop until done or blocked)**")
-        .unwrap();
-    assert!(states < workspace && workspace < context && context < edits);
-    for contract in [
-        "If these fields are absent, retain the existing workflow",
-        "Create or verify and reuse one dedicated worktree per change",
-        "A linked worktree alone does not establish ownership",
-        "current checkout's HEAD",
-        "Report the verified target directory and branch",
-        "pause and ask the user to commit them",
-        "Do not automatically commit, copy files",
-        "by repository-relative path into the target worktree",
-        "Preserve an explicitly selected external planning store",
-        "planning-to-code repository relationship is unclear, pause",
-        "From the verified worktree, rerun",
-        "Recheck state, planning inputs and resolved paths",
-        "Reuse the verified workspace on repeated instructions",
-        "command working directories and file-tool paths explicitly",
-        "Task checkbox updates target its resolved local planning file",
-        "preparation fails",
-        "Do not fall back to editing in the original checkout",
-        "do not automatically merge, delete worktrees, or delete branches",
-        "does not override CLI state or count as task completion",
-    ] {
-        assert!(
-            body.contains(contract),
-            "missing workspace contract: {contract}"
-        );
-    }
-}
-
-#[test]
 fn registry_covers_every_workflow_helper() {
     // Every `get_*_skill_template()` defined in the workflows module must be
     // reachable through `get_skill_templates(None)`. The function pointers

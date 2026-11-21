@@ -11,11 +11,6 @@ pub fn serialize_config(config: &ProjectConfig) -> String {
     lines.push(format!("schema: {}", config.schema));
     lines.push(String::new());
 
-    if let Some(enabled) = config.use_worktree {
-        lines.push(format!("use-worktree: {enabled}"));
-        lines.push(String::new());
-    }
-
     // Context section with comments.
     lines.push("# Project context (optional)".into());
     lines.push("# This is shown to AI when creating artifacts.".into());
@@ -67,7 +62,6 @@ mod tests {
     #[test]
     fn serialize_config_contains_schema() {
         let config = ProjectConfig {
-            use_worktree: None,
             schema: "spec-driven".into(),
             context: None,
             rules: None,
@@ -83,7 +77,6 @@ mod tests {
     #[test]
     fn serialize_config_has_comment_sections() {
         let config = ProjectConfig {
-            use_worktree: None,
             schema: "spec-driven".into(),
             context: None,
             rules: None,
@@ -101,7 +94,6 @@ mod tests {
     #[test]
     fn serialize_config_ends_with_newline() {
         let config = ProjectConfig {
-            use_worktree: None,
             schema: "spec-driven".into(),
             context: None,
             rules: None,

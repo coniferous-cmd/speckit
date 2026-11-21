@@ -46,9 +46,6 @@ pub struct GitHubCopilotConfig {
 pub struct ProjectConfig {
     /// Required: which schema to use (e.g. `"spec-driven"`).
     pub schema: String,
-    /// Optional agent worktree preference; omission disables guidance.
-    #[serde(rename = "use-worktree", skip_serializing_if = "Option::is_none")]
-    pub use_worktree: Option<bool>,
     /// Optional: project context injected into all artifact instructions.
     /// Max size: 50 KB (enforced during parsing).
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -648,19 +645,9 @@ pub fn read_project_config(project_root: &Path) -> Option<ProjectConfig> {
         None => None,
     };
 
-    let use_worktree = match raw_mapping.get(serde_yaml::Value::String("use-worktree".into())) {
-        Some(serde_yaml::Value::Bool(value)) => Some(*value),
-        Some(_) => {
-            eprintln!("Invalid 'use-worktree' field in config (must be a boolean)");
-            None
-        }
-        None => None,
-    };
-
     // Build config; return None if nothing was parsed.
     let config = ProjectConfig {
         schema: schema?,
-        use_worktree,
         context,
         rules,
         operations,
@@ -823,7 +810,6 @@ mod tests {
     fn load_operation_inputs_with_context() {
         let config = ProjectConfig {
             schema: "spec-driven".into(),
-            use_worktree: None,
             context: Some("My project context".into()),
             rules: None,
             operations: None,
@@ -848,7 +834,6 @@ mod tests {
             schema: "spec-driven".into(),
             context: None,
             rules: None,
-            use_worktree: None,
             operations: Some(operations),
             store: None,
             github_copilot: None,

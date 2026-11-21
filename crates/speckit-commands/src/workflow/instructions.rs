@@ -596,17 +596,7 @@ pub async fn generate_implement_instructions(
         if idx.is_empty() { None } else { Some(idx) }
     };
 
-    let use_worktree = (state == "ready"
-        && core_project_config
-            .as_ref()
-            .and_then(|config| config.use_worktree)
-            == Some(true))
-    .then_some(true);
-    let workspace_instruction = use_worktree.map(|_| workspace_instruction(change_name));
-
     Ok(ImplementInstructions {
-        use_worktree,
-        workspace_instruction,
         change_name: change_name.to_string(),
         change_dir: change_dir.to_string_lossy().replace('\\', "/"),
         schema_name: schema.to_string(),
@@ -628,16 +618,6 @@ pub async fn generate_implement_instructions(
         context: operation_inputs.context,
         operation_guidance: operation_inputs.operation_guidance,
     })
-}
-
-/// Agent guidance only: generating instructions never mutates Git workspaces.
-fn workspace_instruction(change_name: &str) -> String {
-    format!(
-        "Before implementation edits, prepare one dedicated Git worktree for change '{change_name}', shared by all its tasks. Inspect the implementation repository, current checkout, registered worktrees and branches. Verify that an existing workspace belongs to this change before reusing it; an arbitrary linked worktree is not proof of ownership. Otherwise create a dedicated branch and worktree from the current checkout's HEAD, using project naming conventions. Never overwrite an existing directory or branch; pause on conflicts or ambiguous identity. Report the verified worktree path and branch.\n\n\
-Verify that required planning inputs exist and are current in the target worktree. If uncommitted planning inputs are unavailable or stale there, pause and ask the user to commit them; do not automatically commit, copy files, or use stale inputs. Map repository-local contextFiles by repository-relative path into the target worktree and update its task tracking file. Preserve an explicitly selected external planning store and its --store scope; do not remap its paths into the code worktree. Verify the planning-to-code repository relationship first, and pause if it is ambiguous rather than blindly creating a code worktree for the planning repository.\n\n\
-Run status and instructions implement again from the verified worktree with the same change and selected store, validating state, planning inputs and paths. Reuse this verified workspace rather than creating another on repeated instructions. Direct all implementation file-tool paths, command working directories, builds and tests to it; task updates use the resolved planning scope (the target worktree for local planning, or the selected external store).\n\n\
-If Git is unavailable, the code directory is not a Git repository, preparation fails, or repository state is unsafe or unsupported, stop and report the blocker. Never silently fall back to implementation in the original checkout. After completion leave the worktree and branch for review; do not automatically merge, delete worktrees, or delete branches. This is agent guidance, not CLI-enforced isolation."
-    )
 }
 
 /// Parse task lines from a tasks.md file content.
@@ -715,12 +695,6 @@ fn print_implement_instructions_text(instructions: &ImplementInstructions) {
             let checkbox = if task.done { "[x]" } else { "[ ]" };
             println!("- {checkbox} {}", task.description);
         }
-        println!();
-    }
-
-    if let Some(ref workspace) = instructions.workspace_instruction {
-        println!("### Workspace Preparation");
-        println!("{workspace}");
         println!();
     }
 
@@ -814,7 +788,6 @@ mod tests {
         ProjectConfig {
             schema: "spec-driven".to_string(),
             context: None,
-            use_worktree: None,
             rules: Some(rules),
             operations: None,
             store: None,
@@ -868,7 +841,6 @@ mod tests {
     #[test]
     fn extract_rules_returns_none_when_config_has_no_rules_block() {
         let config = ProjectConfig {
-            use_worktree: None,
             schema: "spec-driven".to_string(),
             context: None,
             rules: None,
@@ -920,7 +892,6 @@ mod tests {
         );
         let config = ProjectConfig {
             schema: "spec-driven".to_string(),
-            use_worktree: None,
             context: Some("Production changes require a rollout record.".to_string()),
             rules: None,
             operations: Some(operations),

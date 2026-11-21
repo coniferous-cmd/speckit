@@ -114,23 +114,6 @@ speckit config get <key>         # Get a value
 speckit config set <key> <value> # Set a value
 ```
 
-### Implementation in a Git worktree
-
-Enable workspace guidance in the selected project's configuration (not global config):
-
-```yaml
-schema: spec-driven
-use-worktree: true
-```
-
-Run `speckit instructions implement --change <name> --json`, or invoke the generated implement-change skill. With `use-worktree: true` and state `ready`, JSON includes `useWorktree: true` and a separate `workspaceInstruction`; text output includes the same guidance. When disabled or omitted, or when state is `blocked` or `all_done`, both fields and the extra text section are omitted. The schema's original instruction remains unchanged. Run `speckit update` to refresh previously generated skills.
-
-The agent is instructed to create or verify and reuse **one dedicated worktree per change**, report its path and branch, and direct implementation edits, builds and tests there. Local planning paths and task checkboxes target that worktree. An explicitly selected external store retains its `--store <id>` scope and planning paths; the agent must verify which code repository it belongs to.
-
-Required planning inputs must be present and current in the target workspace. If uncommitted inputs are unavailable or stale, the agent must pause and ask you to commit them, not automatically copy or commit them. Ambiguous repository/workspace identity or preparation failure also requires a pause, not fallback to the original checkout. Completion leaves the branch and worktree for review without automatic merging or cleanup.
-
-This is an **agent behavior contract, not CLI-enforced isolation**: querying instructions does not create branches or worktrees or run Git mutations.
-
 ## Stores
 
 Standalone Speckit repos can be registered, shared, and managed independently of the project. Worksets provide personal working views that compose folders across stores.

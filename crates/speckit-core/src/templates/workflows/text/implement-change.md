@@ -37,7 +37,6 @@ Implement tasks from a Speckit change.
    - Dynamic instruction based on current state
    - Optional `context`: current required project instruction input from the selected root
    - Optional `operationGuidance`: current advisory guidance for implement
-   - Optional `useWorktree` and `workspaceInstruction`: workspace preparation required only when enabled and ready
 
    **Handle states:**
    - If `state: "blocked"` (missing artifacts): show message, suggest using `/speckit:continue` (if it is not installed, run `speckit status --change "<name>" --json` to see the next artifact and `speckit instructions <artifact-id> --change "<name>" --json` for how to create it)
@@ -59,19 +58,7 @@ Implement tasks from a Speckit change.
    conflicts with those controlling inputs, do not follow it and explain why.
    These are prompt-level behavior contracts, not enforceable checks.
 
-4. **Prepare the implementation workspace when requested**
-
-   Only after handling blocked/all_done, and before reading target workspace context or making implementation edits, consume `workspaceInstruction` when `useWorktree: true`. If these fields are absent, retain the existing workflow in the current directory; do not create a worktree merely because this step exists.
-
-   - Follow the built-in workspace instruction separately from schema `instruction`, `context`, and `operationGuidance`; it does not override CLI state or count as task completion.
-   - Inspect the implementation repository, current checkout, registered worktrees and branches. Create or verify and reuse one dedicated worktree per change, shared by all tasks. A linked worktree alone does not establish ownership. New worktrees start from the current checkout's HEAD; follow project naming conventions without overwriting directories or branches. Report the verified target directory and branch.
-   - Verify required planning inputs are present and current in that workspace. If uncommitted planning inputs are unavailable or stale, pause and ask the user to commit them. Do not automatically commit, copy files, or silently use stale inputs.
-   - Map repository-local `contextFiles` (CLI `context_files`) by repository-relative path into the target worktree, including the task tracking file. Preserve an explicitly selected external planning store and `--store <id>` on every scoped command; do not remap external store paths into the code worktree. If the planning-to-code repository relationship is unclear, pause rather than blindly creating a worktree for the planning repository.
-   - From the verified worktree, rerun `speckit status --change "<name>" --json` and `speckit instructions implement --change "<name>" --json`, retaining the selected store flag. Recheck state, planning inputs and resolved paths; stop on blocked/all_done as above. Reuse the verified workspace on repeated instructions, not a new worktree per query or task.
-   - Direct subsequent command working directories and file-tool paths explicitly to the target worktree; a shell `cd` alone is insufficient. Implementation edits, builds and tests run there. Task checkbox updates target its resolved local planning file, or the explicitly selected external store when planning is external.
-   - If Git is unavailable, the directory is not a Git repository, preparation fails, or repository state or workspace identity is unsafe or unsupported, pause and report the blocker. Do not fall back to editing in the original checkout. Leave the worktree and branch for review on completion; do not automatically merge, delete worktrees, or delete branches.
-
-5. **Read context files**
+4. **Read context files**
 
    Read every file path listed under `contextFiles` from the implement instructions output.
    The files depend on the schema being used:
@@ -81,7 +68,7 @@ Implement tasks from a Speckit change.
    Do not copy `context` or `operationGuidance` verbatim into implementation
    files or planning artifacts unless the user separately asks for that content.
 
-6. **Show current progress**
+5. **Show current progress**
 
    Display:
    - Schema being used
@@ -89,7 +76,7 @@ Implement tasks from a Speckit change.
    - Remaining tasks overview
    - Dynamic instruction from CLI
 
-7. **Implement tasks (loop until done or blocked)**
+6. **Implement tasks (loop until done or blocked)**
 
    For each pending task:
    - Show which task is being worked on
@@ -105,7 +92,7 @@ Implement tasks from a Speckit change.
    - Error or blocker encountered → report and wait for guidance
    - User interrupts
 
-8. **On completion or pause, show status**
+7. **On completion or pause, show status**
 
    Display:
    - Tasks completed this session

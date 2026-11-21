@@ -234,7 +234,7 @@ fn change_lifecycle_json_contract_is_available_from_nested_directory() {
 }
 
 #[test]
-fn implement_cli_contract_rejects_apply_and_reports_implement_requires() {
+fn implement_cli_contract_and_legacy_config() {
     let (_temp, project, _nested, config_home, data_home) = fixture();
     let schema_dir = project.join("speckit/schemas/spec-driven");
     std::fs::create_dir_all(schema_dir.join("templates")).unwrap();
@@ -278,6 +278,32 @@ fn implement_cli_contract_rejects_apply_and_reports_implement_requires() {
     let instructions_json = json_stdout(&instructions);
     assert_eq!(instructions_json["state"], "all_done");
     assert_eq!(instructions_json["progress"]["complete"], 1);
+
+    std::fs::write(change_dir.join("tasks.md"), "- [ ] pending\n").unwrap();
+    std::fs::write(
+        project.join("speckit/config.yaml"),
+        "schema: spec-driven\nuse-worktree: true\ncontext: Keep project context.\noperations:\n  implement:\n    guidance: [Keep operation guidance.]\n",
+    )
+    .unwrap();
+    let mut args = vec!["instructions", "implement", "--change", "contract"];
+    let text = run_cli(&project, &config_home, &data_home, &args);
+    assert!(text.status.success());
+    let stdout = String::from_utf8_lossy(&text.stdout);
+    assert!(stdout.contains("- [ ] pending"));
+    assert!(!stdout.contains("### Workspace Preparation"));
+
+    args.push("--json");
+    let ready = run_cli(&project, &config_home, &data_home, &args);
+    let ready_json = json_stdout(&ready);
+    assert_eq!(ready_json["state"], "ready");
+    assert_eq!(ready_json["progress"]["remaining"], 1);
+    assert_eq!(ready_json["context"], "Keep project context.");
+    assert_eq!(
+        ready_json["operation_guidance"],
+        serde_json::json!(["Keep operation guidance."])
+    );
+    assert!(ready_json.get("useWorktree").is_none());
+    assert!(ready_json.get("workspaceInstruction").is_none());
 
     let removed = run_cli(
         &project,
