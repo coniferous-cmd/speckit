@@ -2,6 +2,8 @@ Verify that an implementation matches the change artifacts (specs, tasks, design
 
 **Store selection:** If the user names a store (a store is a standalone Speckit repo registered on this machine) or the work lives in one, run `speckit store list --json` to discover registered store ids, then pass `--store <id>` on the commands that read or write specs and changes (`new change`, `status`, `instructions`, `list`, `show`, `validate`, `archive`, `doctor`, `context`, `schemas`, `view`). Once selected, treat `--store <id>` as sticky for the rest of the workflow. Every unscoped example of those commands below is shorthand: before running it, append the flag. For example, run `speckit status --change "<name>" --json --store "<id>"`, not the unscoped form shown below. Other commands do not take the flag. Hints printed by commands already carry the flag; keep it on follow-ups. Without a store, commands act on the nearest local `speckit/` root.
 
+{{PROJECT_ROOT_GUARD}}
+
 **Input**: Optionally specify a change name. If omitted, check if it can be inferred from conversation context. If vague or ambiguous you MUST prompt for available changes.
 
 **Steps**
@@ -57,18 +59,39 @@ Verify that an implementation matches the change artifacts (specs, tasks, design
 
    **Spec Coverage**:
    - If delta specs exist in `contextFiles.specs`:
-     - Extract all requirements (marked with "### Requirement:")
-     - For each requirement:
+     - Extract all requirements (marked with "### Requirement:", or listed as `FROM:`/`TO:` pairs under `## RENAMED Requirements`) and note the delta section each one sits under: `## ADDED`, `## MODIFIED`, `## REMOVED`, or `## RENAMED Requirements`. The section decides what the check looks for.
+     - For each ADDED or MODIFIED requirement (for MODIFIED, check the text in the delta, not the old wording):
        - Search codebase for keywords related to the requirement
        - Assess if implementation likely exists
-     - If requirements appear unimplemented:
+     - If ADDED or MODIFIED requirements appear unimplemented:
        - Add CRITICAL issue: "Requirement not found: <requirement name>"
        - Recommendation: "Implement requirement X: <description>"
+     - For each REMOVED requirement, the change asks for the behavior to be gone, so invert the check:
+       - A REMOVED block carries only the requirement name and any `**Reason**`/`**Migration**` notes, so the delta does not describe the behavior itself. Before searching, read the baseline requirement in the main spec at `<planningHome.root>/speckit/specs/<capability-path>/spec.md`, using the same capability path as the delta spec. Match it by exact normalized name, the rule Speckit uses when it applies REMOVED blocks: the heading text after `Requirement:`, trimmed, with a closing `#` run dropped only when a space or tab precedes it (so `C#` keeps its `#`), compared case-sensitively. A similarly worded heading is not a match; a rename belongs under RENAMED. Its body and scenarios are the evidence for the behavior that must be gone; never search from the requirement name alone.
+       - If that file holds no requirement with that exact normalized name - for example because an earlier sync already applied the removal, or a similarly named ADDED requirement replaced it - recover the baseline from the same file's history, in the planning repository rather than the current directory: `git -C "<planningHome.root>" log -p -- speckit/specs/<capability-path>/spec.md`, or `git -C "<planningHome.root>" show <commit>^:./speckit/specs/<capability-path>/spec.md` once you have identified the commit that applied the removal. Empty output means the pathspec matched nothing, not that there is no baseline: `git log` reports an unmatched path as success, so re-check the path before drawing any conclusion from silence.
+       - A baseline that adds nothing to its own title - no body beyond a restatement of the name, no scenarios - is unusable evidence, the same as a missing one. If no usable baseline is available in either place, mark **Spec Coverage** as not verified for that entry with the reason and stop there: do not search, and never count an unsearched removal as passing.
+       - Search codebase for that behavior. Matches in `speckit/` artifacts or docs, or in code that serves only the Migration note or an ADDED requirement, are not evidence by themselves. Report any code path that still delivers the removed behavior, including one shared with an ADDED requirement.
+       - Finding no implementation is the expected result, but only once the baseline behavior was the thing you searched for. Never report a REMOVED requirement as "Requirement not found" or recommend implementing it.
+       - If the behavior is still present:
+         - Add CRITICAL issue: "Removed requirement still implemented: <requirement name>"
+         - Recommendation: "Remove the remaining implementation at <file>:<lines>, following the requirement's Migration note if it has one"
+     - For each RENAMED entry (`FROM:`/`TO:`), the name changes but the behavior stays, so check the TO requirement for that unchanged behavior:
+       - Do not report the FROM name as missing, and do not require code symbols, identifiers, or file names to be renamed.
+       - If the TO name also appears under MODIFIED, its behavior is checked there against the MODIFIED text; skip it here.
+       - Otherwise, read the baseline requirement in the main spec at `<planningHome.root>/speckit/specs/<capability-path>/spec.md`, using the same capability path as the delta spec: the requirement under the FROM name, or under the TO name only when the FROM name is absent because the main spec is already synced. Its body and scenarios are the evidence for the behavior the TO requirement keeps.
+       - Search codebase for that behavior and assess if it is still implemented.
+       - If it appears unimplemented:
+         - Add CRITICAL issue: "Renamed requirement not found: <TO name>"
+         - Recommendation: "Restore the behavior of <TO name> (renamed from <FROM name>); a rename must not change behavior"
+       - If the baseline requirement cannot be found or read, mark **Spec Coverage** as not verified for that entry with the reason. Never count an unchecked rename as passing.
+     - If the change declares `skip_specs` in `.speckit.yaml` and has no delta specs, mark **Spec Coverage** as not applicable (the change opts out of spec-level behavior) rather than not verified, and say so in the report.
 
 6. **Verify Correctness**
 
+   If the delta specs are readable and contain at least one REMOVED or RENAMED requirement but no ADDED or MODIFIED requirements (the change only removes or renames requirements), report **Requirement Implementation Mapping** and **Scenario Coverage** as **Not applicable**. The REMOVED and RENAMED checks under Spec Coverage are the evidence for such a change (each entry with a usable baseline is checked there against its baseline behavior, and an entry already marked not verified there stays not verified), so do not mark these two checks as not verified. A delta spec with no parseable requirements at all is unusable evidence, not a removal-only change: mark these checks as not verified.
+
    **Requirement Implementation Mapping**:
-   - For each requirement from delta specs:
+   - For each ADDED or MODIFIED requirement from delta specs (REMOVED entries, and RENAMED entries without a MODIFIED block, were settled under Spec Coverage):
      - Search codebase for implementation evidence
      - If found, note file paths and line ranges
      - Assess if implementation matches requirement intent
@@ -118,9 +141,15 @@ Verify that an implementation matches the change artifacts (specs, tasks, design
 
    **Issues by Priority**:
 
+   In each Status cell, report the results of checks that ran and `Not verified (<reason>)` for every skipped check. If all checks in a dimension were skipped, start the cell with `Not verified`. Never score a skipped check as passing. Treat every not verified or partially verified check as skipped in the final assessment. Count only ADDED and MODIFIED requirements in N, and report REMOVED and RENAMED requirements separately (for example, "1 removal confirmed, 1 rename verified", or "1 removal not verified (baseline unavailable)"). For a change that only removes or renames requirements, the Correctness cell reads `Not applicable (no ADDED or MODIFIED requirements)`.
+
+   **Issues by Priority**:
+
    1. **CRITICAL** (Must fix before archive):
       - Incomplete tasks
       - Missing requirement implementations
+      - Removed requirements still implemented
+      - Renamed requirements whose behavior is no longer implemented
       - Each with specific, actionable recommendation
 
    2. **WARNING** (Should fix):
@@ -134,9 +163,12 @@ Verify that an implementation matches the change artifacts (specs, tasks, design
       - Each with specific recommendation
 
    **Final Assessment**:
-   - If CRITICAL issues: "X critical issue(s) found. Fix before archiving."
-   - If only warnings: "No critical issues. Y warning(s) to consider. Ready for archive (with noted improvements)."
-   - If all clear: "All checks passed. Ready for archive."
+   - If CRITICAL issues: "X critical issue(s) found. Fix before archiving." If any check was skipped, also name every skipped check and its reason.
+   - If no CRITICAL issues, one or more warnings, and no checks were skipped: "No critical issues. Y warning(s) to consider. Ready for archive (with noted improvements)."
+   - If only suggestions and no checks were skipped: "No critical issues or warnings. Z suggestion(s) to consider. Ready for archive (with noted improvements)."
+   - If no issues and no checks were skipped: "All checks passed. Ready for archive."
+   - If any check was skipped and there are no CRITICAL issues: do not claim readiness. Say "No critical issues found in the checks that ran. <check(s)> not verified: <reason>." Include the warning count when nonzero.
+   - Include the suggestion count when nonzero in every final assessment.
 
 **Verification Heuristics**
 

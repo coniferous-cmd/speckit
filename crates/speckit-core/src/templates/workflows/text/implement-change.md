@@ -2,7 +2,8 @@ Implement tasks from a Speckit change.
 
 **Store selection:** If the user names a store (a store is a standalone Speckit repo registered on this machine) or the work lives in one, run `speckit store list --json` to discover registered store ids, then pass `--store <id>` on the commands that read or write specs and changes (`new change`, `status`, `instructions`, `list`, `show`, `validate`, `archive`, `doctor`, `context`, `schemas`, `view`). Once selected, treat `--store <id>` as sticky for the rest of the workflow. Every unscoped example of those commands below is shorthand: before running it, append the flag. For example, run `speckit status --change "<name>" --json --store "<id>"`, not the unscoped form shown below. Other commands do not take the flag. Hints printed by commands already carry the flag; keep it on follow-ups. Without a store, commands act on the nearest local `speckit/` root.
 
-**Project check:** Verify the planning root with `speckit status --json` before editing files. If status lists available changes and asks for a change name, proceed with change selection. If the project declares a store that cannot be resolved, show the error and stop. If no Speckit root exists and you selected this workflow yourself, continue with the user's request normally. If the user explicitly requested Speckit, ask whether to initialize this project, use an existing store, or continue without Speckit. Never initialize a project as a side effect.
+{{PROJECT_ROOT_GUARD}}
+
 
 **Input**: Optionally specify a change name. If omitted, check if it can be inferred from conversation context. If vague or ambiguous you MUST prompt for available changes.
 
