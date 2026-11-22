@@ -3,6 +3,7 @@
 use serde_json::{Value, json};
 use speckit_core::planning_home::find_repo_planning_root_sync;
 use speckit_core::project_config::{link_project_store, resolve_config_file_path};
+use speckit_core::root_selection::{local_planning_inventory, local_planning_shadowed};
 use speckit_core::store::errors::{StoreDiagnosticSeverity, make_store_diagnostic};
 use speckit_core::store::{StoreError, operations as core};
 
@@ -133,13 +134,22 @@ pub async fn store_setup(
         let id = &result.store.id;
         let config = config_path.display();
         match link_project_store(&config_path, id) {
-            Ok(true) => result.diagnostics.push(make_store_diagnostic(
-                StoreDiagnosticSeverity::Info,
-                "store_project_linked",
-                format!("Set store '{id}' as the project fallback in {config}."),
-                Some("store.pointer".into()),
-                None,
-            )),
+            Ok(true) => {
+                result.diagnostics.push(make_store_diagnostic(
+                    StoreDiagnosticSeverity::Info,
+                    "store_project_linked",
+                    format!("Set store '{id}' as the project's planning root in {config}."),
+                    Some("store.pointer".into()),
+                    None,
+                ));
+                let inventory = local_planning_inventory(&project_root);
+                if !inventory.is_empty() {
+                    result.diagnostics.push(local_planning_shadowed(
+                        &inventory,
+                        Some(config_path.as_path()),
+                    ));
+                }
+            }
             Ok(false) => {}
             Err(error) => result.diagnostics.push(make_store_diagnostic(
                 StoreDiagnosticSeverity::Warning,

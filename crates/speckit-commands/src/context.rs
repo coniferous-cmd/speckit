@@ -6,7 +6,7 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use crate::shared_gather::gather_relationship_data;
+use crate::shared_gather::{gather_relationship_data, local_planning_shadow_status};
 use crate::shared_output::{StoreDiagnostic, print_json};
 
 /// Working set: the complete context for a root.
@@ -48,6 +48,8 @@ pub async fn context_command(
     force: bool,
 ) -> anyhow::Result<()> {
     let root = crate::change::resolve_command_root(store, true)?;
+    let shadow_status: Vec<StoreDiagnostic> =
+        local_planning_shadow_status(&root).into_iter().collect();
     let project_root = root.path.to_string_lossy().into_owned();
 
     let data = gather_relationship_data(&project_root).await;
@@ -77,7 +79,7 @@ pub async fn context_command(
             store_id: root.store_id,
         },
         members,
-        status: Vec::new(),
+        status: shadow_status,
     };
 
     // Write code workspace file if requested
@@ -223,7 +225,7 @@ fn print_human_working_set(
         }
     }
 
-    if !unavailable.is_empty() || !working_set.status.is_empty() {
+    if !unavailable.is_empty() {
         println!();
         println!("Not available on this machine");
         for member in &unavailable {
@@ -238,11 +240,13 @@ fn print_human_working_set(
                 }
             }
         }
-        for diagnostic in &working_set.status {
-            println!("  Note: {}", diagnostic.message);
-            if let Some(ref fix) = diagnostic.fix {
-                println!("  Fix: {fix}");
-            }
+    }
+
+    for diagnostic in &working_set.status {
+        println!();
+        println!("Note: {}", diagnostic.message);
+        if let Some(ref fix) = diagnostic.fix {
+            println!("Fix: {fix}");
         }
     }
 }

@@ -13,7 +13,21 @@ pub struct StoreDiagnostic {
     pub code: String,
     pub message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub target: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub fix: Option<String>,
+}
+
+impl From<speckit_core::store::errors::StoreDiagnostic> for StoreDiagnostic {
+    fn from(diagnostic: speckit_core::store::errors::StoreDiagnostic) -> Self {
+        Self {
+            severity: diagnostic.severity.to_string(),
+            code: diagnostic.code,
+            message: diagnostic.message,
+            target: diagnostic.target,
+            fix: diagnostic.fix,
+        }
+    }
 }
 
 /// Print a value as pretty-printed JSON to stdout.
@@ -47,6 +61,7 @@ pub fn as_status(error: &anyhow::Error, fallback_code: &str) -> StoreDiagnostic 
         severity: "error".to_string(),
         code: fallback_code.to_string(),
         message: msg,
+        target: None,
         fix: None,
     }
 }

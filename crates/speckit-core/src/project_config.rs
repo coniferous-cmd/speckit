@@ -61,7 +61,10 @@ pub struct ProjectConfig {
     /// Optional: per-operation advisory guidance.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub operations: Option<OperationsConfig>,
-    /// Optional: store to use when the project has no local specs or changes.
+    /// Optional: the project's authoritative store.
+    ///
+    /// When set, root resolution uses this store and ignores the project's
+    /// local `specs/` and `changes/`. `--store <id>` still outranks it.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub store: Option<String>,
     /// Optional: GitHub Copilot integration preferences.

@@ -163,7 +163,7 @@ fn setup_is_visible_to_context() {
 }
 
 #[test]
-fn setup_links_a_store_as_the_fallback_for_local_planning() {
+fn setup_links_a_store_as_the_authoritative_planning_root() {
     let temp = TempDir::new().unwrap();
     let project = temp.path().join("code");
     let store = temp.path().join("planning");
@@ -192,14 +192,31 @@ fn setup_links_a_store_as_the_fallback_for_local_planning() {
             .contains("store:")
     );
 
-    let context = success(&project, &["context", "--json"]);
-    assert_eq!(context["root"]["storeId"], "team");
-    assert_eq!(
-        Path::new(context["root"]["path"].as_str().unwrap())
-            .canonicalize()
-            .unwrap(),
-        store.canonicalize().unwrap()
-    );
+    let assert_store_root = || {
+        let context = success(&project, &["context", "--json"]);
+        assert_eq!(context["root"]["storeId"], "team");
+        assert_eq!(
+            Path::new(context["root"]["path"].as_str().unwrap())
+                .canonicalize()
+                .unwrap(),
+            store.canonicalize().unwrap()
+        );
+    };
+    assert_store_root();
+
+    // Local specs, active changes, and archived changes no longer win.
+    let spec = project.join("speckit/specs/local-capability/spec.md");
+    std::fs::create_dir_all(spec.parent().unwrap()).unwrap();
+    std::fs::write(&spec, "# Local spec\n").unwrap();
+    assert_store_root();
+
+    let archive = project.join("speckit/changes/archive/archived-change");
+    std::fs::create_dir(&archive).unwrap();
+    assert_store_root();
+
+    std::fs::create_dir(project.join("speckit/changes/local-change")).unwrap();
+    assert_store_root();
+
     let created = success(&project, &["new", "change", "external-change", "--json"]);
     assert_eq!(created["change"]["id"], "external-change");
     assert!(
@@ -208,40 +225,6 @@ fn setup_links_a_store_as_the_fallback_for_local_planning() {
             .is_file()
     );
     assert!(!project.join("speckit/changes/external-change").exists());
-
-    let assert_local_root = || {
-        let context = success(&project, &["context", "--json"]);
-        assert!(context["root"].get("storeId").is_none());
-        assert_eq!(
-            Path::new(context["root"]["path"].as_str().unwrap())
-                .canonicalize()
-                .unwrap(),
-            project.canonicalize().unwrap(),
-        );
-    };
-    let spec = project.join("speckit/specs/local-capability/spec.md");
-    std::fs::create_dir_all(spec.parent().unwrap()).unwrap();
-    std::fs::write(&spec, "# Local spec\n").unwrap();
-    assert_local_root();
-    std::fs::remove_file(&spec).unwrap();
-
-    let archive = project.join("speckit/changes/archive/archived-change");
-    std::fs::create_dir(&archive).unwrap();
-    assert_local_root();
-    std::fs::remove_dir(&archive).unwrap();
-
-    std::fs::create_dir(project.join("speckit/changes/local-change")).unwrap();
-    assert_local_root();
-    success(
-        &project,
-        &["new", "change", "another-local-change", "--json"],
-    );
-    assert!(
-        project
-            .join("speckit/changes/another-local-change/.speckit.yaml")
-            .is_file()
-    );
-    assert!(!store.join("speckit/changes/another-local-change").exists());
 
     let retry = success(&project, &args);
     assert_eq!(retry["registry"]["alreadyRegistered"], true);
@@ -264,6 +247,163 @@ fn setup_links_a_store_as_the_fallback_for_local_planning() {
     assert_eq!(std::fs::read_to_string(&config).unwrap(), linked);
     let explicit = success(&project, &["context", "--store", "other", "--json"]);
     assert_eq!(explicit["root"]["storeId"], "other");
+}
+
+#[test]
+fn setup_warns_when_local_planning_is_shadowed() {
+    let temp = TempDir::new().unwrap();
+    let project = temp.path().join("code");
+    let store = temp.path().join("planning");
+    let spec = project.join("speckit/specs/local/spec.md");
+    std::fs::create_dir_all(spec.parent().unwrap()).unwrap();
+    std::fs::write(&spec, "# Local spec\n").unwrap();
+    std::fs::create_dir_all(project.join("speckit/changes/active-change")).unwrap();
+    std::fs::create_dir_all(project.join("speckit/changes/archive/old-change")).unwrap();
+    std::fs::write(project.join("speckit/config.yaml"), "schema: spec-driven\n").unwrap();
+
+    let setup = success(
+        &project,
+        &[
+            "store",
+            "setup",
+            "team",
+            "--path",
+            store.to_str().unwrap(),
+            "--json",
+        ],
+    );
+    assert_eq!(setup["status"][0]["code"], "store_project_linked");
+    let shadow = &setup["status"][1];
+    assert_eq!(shadow["code"], "local_planning_shadowed");
+    assert_eq!(shadow["severity"], "warning");
+    assert_eq!(shadow["target"], "store.pointer");
+    let message = shadow["message"].as_str().unwrap();
+    assert!(message.contains("1 spec"), "{message}");
+    assert!(message.contains("1 active change"), "{message}");
+    assert!(message.contains("1 archived change"), "{message}");
+    let fix = shadow["fix"].as_str().unwrap();
+    assert!(
+        fix.to_lowercase().contains("remove the `store` field"),
+        "{fix}"
+    );
+}
+
+#[test]
+fn unregistered_declared_store_fails_with_both_remedies() {
+    let temp = TempDir::new().unwrap();
+    let project = temp.path().join("code");
+    let config = project.join("speckit/config.yaml");
+    let spec = project.join("speckit/specs/local/spec.md");
+    std::fs::create_dir_all(spec.parent().unwrap()).unwrap();
+    std::fs::write(&spec, "# Local spec\n").unwrap();
+    std::fs::write(&config, "schema: spec-driven\nstore: ghost\n").unwrap();
+    let team = existing_root(temp.path());
+    success(
+        &project,
+        &[
+            "store", "register", &team, "--id", "team", "--yes", "--json",
+        ],
+    );
+
+    let output = run(&project, &["doctor", "--json"]);
+    assert!(!output.status.success());
+    let payload: Value = serde_json::from_slice(&output.stdout).unwrap();
+    let status = &payload["status"][0];
+    assert_eq!(status["code"], "unknown_store");
+    let fix = status["fix"].as_str().unwrap();
+    assert!(fix.contains("store list"), "{fix}");
+    assert!(
+        fix.to_lowercase().contains("remove the `store` field"),
+        "{fix}"
+    );
+    let expected = config.canonicalize().unwrap();
+    assert!(fix.contains(expected.to_str().unwrap()), "{fix}");
+}
+
+#[test]
+fn non_string_store_value_fails_even_with_local_content() {
+    let temp = TempDir::new().unwrap();
+    let project = temp.path().join("code");
+    let config = project.join("speckit/config.yaml");
+    let spec = project.join("speckit/specs/local/spec.md");
+    std::fs::create_dir_all(spec.parent().unwrap()).unwrap();
+    std::fs::write(&spec, "# Local spec\n").unwrap();
+    std::fs::write(&config, "schema: spec-driven\nstore: [alpha, beta]\n").unwrap();
+
+    let output = run(&project, &["doctor", "--json"]);
+    assert!(!output.status.success());
+    let payload: Value = serde_json::from_slice(&output.stdout).unwrap();
+    let status = &payload["status"][0];
+    assert_eq!(status["code"], "invalid_store_pointer");
+    assert!(
+        status["message"]
+            .as_str()
+            .unwrap()
+            .contains(config.to_str().unwrap())
+    );
+}
+
+#[test]
+fn unparseable_config_keeps_local_root_only_with_planning_shape() {
+    let temp = TempDir::new().unwrap();
+    let project = temp.path().join("with-planning");
+    std::fs::create_dir_all(project.join("speckit/specs")).unwrap();
+    std::fs::write(project.join("speckit/config.yaml"), "schema: [unclosed\n").unwrap();
+    let context = success(&project, &["context", "--json"]);
+    assert!(context["root"].get("storeId").is_none());
+    assert_eq!(
+        Path::new(context["root"]["path"].as_str().unwrap())
+            .canonicalize()
+            .unwrap(),
+        project.canonicalize().unwrap()
+    );
+
+    let bare = temp.path().join("bare");
+    std::fs::create_dir_all(bare.join("speckit")).unwrap();
+    std::fs::write(bare.join("speckit/config.yaml"), "schema: [unclosed\n").unwrap();
+    let output = run(&bare, &["doctor", "--json"]);
+    assert!(!output.status.success());
+    let payload: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(payload["status"][0]["code"], "invalid_store_pointer");
+}
+
+#[test]
+fn context_and_doctor_report_shadowed_local_planning() {
+    let temp = TempDir::new().unwrap();
+    let project = temp.path().join("code");
+    let store = temp.path().join("planning");
+    std::fs::create_dir_all(project.join("speckit/specs")).unwrap();
+    std::fs::create_dir_all(project.join("speckit/changes/archive")).unwrap();
+    std::fs::write(project.join("speckit/config.yaml"), "schema: spec-driven\n").unwrap();
+    success(
+        &project,
+        &[
+            "store",
+            "setup",
+            "team",
+            "--path",
+            store.to_str().unwrap(),
+            "--json",
+        ],
+    );
+
+    let spec = project.join("speckit/specs/local/spec.md");
+    std::fs::create_dir_all(spec.parent().unwrap()).unwrap();
+    std::fs::write(&spec, "# Local spec\n").unwrap();
+
+    let context = success(&project, &["context", "--json"]);
+    assert_eq!(context["root"]["storeId"], "team");
+    assert_eq!(context["status"][0]["code"], "local_planning_shadowed");
+
+    let doctor = success(&project, &["doctor", "--json"]);
+    assert_eq!(doctor["status"][0]["code"], "local_planning_shadowed");
+
+    std::fs::remove_file(&spec).unwrap();
+
+    let context = success(&project, &["context", "--json"]);
+    assert!(context["status"].as_array().unwrap().is_empty());
+    let doctor = success(&project, &["doctor", "--json"]);
+    assert!(doctor["status"].as_array().unwrap().is_empty());
 }
 
 #[test]

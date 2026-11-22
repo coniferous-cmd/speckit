@@ -4,7 +4,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::project_config::{classify_speckit_dir, store_pointer_problem};
 use crate::speckit_root::inspect_speckit_root;
-use crate::store::errors::{RootSelectionError, StoreError, StoreErrorOptions};
+use crate::store::errors::{
+    RootSelectionError, StoreDiagnostic, StoreDiagnosticSeverity, StoreError, StoreErrorOptions,
+    make_store_diagnostic,
+};
 use crate::store::foundation::{
     StorePathOptions, canonicalize_existing_path, get_store_metadata_path,
     list_store_registry_entries, read_optional_store_metadata_state, read_store_registry_state,
@@ -299,7 +302,8 @@ fn resolve_store_root(
 ///
 /// Priority:
 /// 1. `--store <id>` selects a registered store's root.
-/// 2. Nearest ancestor containing a qualifying `speckit/` directory.
+/// 2. Nearest ancestor containing a qualifying `speckit/` directory; a
+///    `store:` value declared there wins over its local specs and changes.
 /// 3. Global `defaultStore` fallback.
 /// 4. Error hint with registered stores, or implicit root.
 pub fn resolve_speckit_root(
@@ -442,18 +446,13 @@ fn resolve_nearest_or_declared_root(
 ) -> Result<ResolvedSpeckitRoot, RootSelectionError> {
     let classification = classify_speckit_dir(nearest_root);
     let pointer = classification.pointer;
-    if (pointer.value.is_some() || pointer.malformed.is_some())
-        && has_local_planning_content(nearest_root)
-    {
-        return Ok(make_root(nearest_root, SpeckitRootSource::Nearest, None));
-    }
+    let config_file = pointer.file_path.as_deref();
 
     // Local planning roots have historically worked with an unreadable config.
     if let Some(reason) = pointer.malformed
         && (!classification.has_planning_shape || reason != "unparseable")
     {
-        let file = pointer
-            .file_path
+        let file = config_file
             .map(|path| path.display().to_string())
             .unwrap_or_else(|| "speckit/config.yaml".to_string());
         return Err(RootSelectionError::new(
@@ -469,24 +468,154 @@ fn resolve_nearest_or_declared_root(
         ));
     }
 
+    // A declared store is authoritative: local planning content is ignored
+    // while the pointer is present, so a broken declaration must fail rather
+    // than silently redirect commands back to the local root.
     if let Some(store_id) = pointer.value {
-        return resolve_store_root(&store_id, global_data_dir, SpeckitRootSource::ConfigPointer);
+        return resolve_store_root(&store_id, global_data_dir, SpeckitRootSource::ConfigPointer)
+            .map_err(|error| with_remove_store_remedy(error, config_file));
     }
 
     // No store pointer found — treat as a local root.
     Ok(make_root(nearest_root, SpeckitRootSource::Nearest, None))
 }
 
-fn has_local_planning_content(project_root: &Path) -> bool {
+/// Appends the "remove the store field" remedy to a config-pointer failure.
+fn with_remove_store_remedy(
+    error: RootSelectionError,
+    config_file: Option<&Path>,
+) -> RootSelectionError {
+    let Some(config_file) = config_file else {
+        return error;
+    };
+    let message = error.to_string();
+    let file = config_file.display();
+    let fix = match error.diagnostic.fix {
+        Some(existing) if !existing.trim().is_empty() => format!(
+            "{existing} Or remove the `store` field from {file} to use the local Speckit root."
+        ),
+        _ => format!(
+            "Register the store, or remove the `store` field from {file} to use the local Speckit root."
+        ),
+    };
+    RootSelectionError::new(
+        message,
+        error.diagnostic.code,
+        StoreErrorOptions {
+            target: error.diagnostic.target,
+            fix: Some(fix),
+        },
+    )
+}
+
+/// Counts of planning content left in a project's local `speckit/` directory.
+#[derive(Debug, Clone, Default)]
+pub struct LocalPlanningInventory {
+    /// Number of `spec.md` files under `speckit/specs`.
+    pub specs: usize,
+    /// Number of directories directly under `speckit/changes`, excluding
+    /// `archive` and dot entries.
+    pub active_changes: usize,
+    /// Number of directories under `speckit/changes/archive`, excluding dot
+    /// entries.
+    pub archived_changes: usize,
+    /// `true` when a directory could not be read, so counts are a lower bound.
+    pub unreadable: bool,
+}
+
+impl LocalPlanningInventory {
+    /// `true` when there is nothing to report.
+    pub fn is_empty(&self) -> bool {
+        !self.unreadable
+            && self.specs == 0
+            && self.active_changes == 0
+            && self.archived_changes == 0
+    }
+
+    /// Human summary such as `2 specs, 1 active change, 1 archived change`.
+    pub fn summary(&self) -> String {
+        let mut parts = vec![
+            plural(self.specs, "spec"),
+            plural(self.active_changes, "active change"),
+            plural(self.archived_changes, "archived change"),
+        ];
+        if self.unreadable {
+            parts.push("some directories could not be read".into());
+        }
+        parts.join(", ")
+    }
+}
+
+fn plural(count: usize, noun: &str) -> String {
+    if count == 1 {
+        format!("{count} {noun}")
+    } else {
+        format!("{count} {noun}s")
+    }
+}
+
+/// Inventories the local planning content under `project_root/speckit`.
+pub fn local_planning_inventory(project_root: &Path) -> LocalPlanningInventory {
     let speckit = project_root.join("speckit");
-    // Keep an unreadable local inventory local instead of redirecting writes.
-    discover_items(&speckit, "changes").map_or(true, |changes| {
-        changes
-            .iter()
-            .any(|name| name != "archive" && !name.starts_with('.'))
-    }) || discover_items(&speckit.join("changes/archive"), "archive").map_or(true, |changes| {
-        changes.iter().any(|name| !name.starts_with('.'))
-    }) || discover_spec_files(&speckit.join("specs")).map_or(true, |specs| !specs.is_empty())
+    let mut inventory = LocalPlanningInventory::default();
+
+    match discover_items(&speckit, "changes") {
+        Ok(changes) => {
+            inventory.active_changes = changes
+                .iter()
+                .filter(|name| name.as_str() != "archive" && !name.starts_with('.'))
+                .count();
+        }
+        Err(_) => inventory.unreadable = true,
+    }
+
+    match discover_items(&speckit.join("changes/archive"), "archive") {
+        Ok(archived) => {
+            inventory.archived_changes = archived
+                .iter()
+                .filter(|name| !name.starts_with('.'))
+                .count();
+        }
+        Err(_) => inventory.unreadable = true,
+    }
+
+    match discover_spec_files(&speckit.join("specs")) {
+        Ok(files) => {
+            inventory.specs = files
+                .iter()
+                .filter(|path| path.file_name().is_some_and(|name| name == "spec.md"))
+                .count();
+        }
+        Err(_) => inventory.unreadable = true,
+    }
+
+    inventory
+}
+
+/// The warning emitted when a declared store shadows local planning content.
+pub fn local_planning_shadowed(
+    inventory: &LocalPlanningInventory,
+    config_file: Option<&Path>,
+) -> StoreDiagnostic {
+    let declared_in = config_file
+        .map(|path| format!(" in {}", path.display()))
+        .unwrap_or_default();
+    let fix = config_file.map(|path| {
+        format!(
+            "Remove the `store` field from {} to use the local Speckit root again.",
+            path.display()
+        )
+    });
+    make_store_diagnostic(
+        StoreDiagnosticSeverity::Warning,
+        "local_planning_shadowed",
+        format!(
+            "The store declared{declared_in} hides local planning content: {}.",
+            inventory.summary()
+        ),
+        Some("store.pointer".into()),
+        fix,
+    )
 }
 
 fn resolve_default_store_root(
@@ -658,6 +787,77 @@ mod tests {
     fn with_store_flag_passes_through_when_no_store() {
         let root = make_root(Path::new("/tmp"), SpeckitRootSource::Nearest, None);
         assert_eq!(with_store_flag(&root, "speckit status"), "speckit status");
+    }
+
+    #[test]
+    fn local_planning_inventory_is_empty_without_content() {
+        let temp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(temp.path().join("speckit/specs")).unwrap();
+        std::fs::create_dir_all(temp.path().join("speckit/changes/archive")).unwrap();
+
+        let inventory = local_planning_inventory(temp.path());
+        assert!(inventory.is_empty());
+        assert_eq!(inventory.specs, 0);
+        assert_eq!(inventory.active_changes, 0);
+        assert_eq!(inventory.archived_changes, 0);
+        assert_eq!(
+            inventory.summary(),
+            "0 specs, 0 active changes, 0 archived changes"
+        );
+    }
+
+    #[test]
+    fn local_planning_inventory_counts_specs_changes_and_archive() {
+        let temp = tempfile::tempdir().unwrap();
+        let speckit = temp.path().join("speckit");
+        std::fs::create_dir_all(speckit.join("specs/one")).unwrap();
+        std::fs::create_dir_all(speckit.join("specs/two")).unwrap();
+        std::fs::write(speckit.join("specs/one/spec.md"), "# One\n").unwrap();
+        std::fs::write(speckit.join("specs/one/design.md"), "# Design\n").unwrap();
+        std::fs::write(speckit.join("specs/two/spec.md"), "# Two\n").unwrap();
+        std::fs::create_dir_all(speckit.join("changes/active")).unwrap();
+        std::fs::create_dir_all(speckit.join("changes/archive/old")).unwrap();
+
+        let inventory = local_planning_inventory(temp.path());
+        assert!(!inventory.is_empty());
+        assert_eq!(inventory.specs, 2);
+        assert_eq!(inventory.active_changes, 1);
+        assert_eq!(inventory.archived_changes, 1);
+        assert!(!inventory.unreadable);
+        assert_eq!(
+            inventory.summary(),
+            "2 specs, 1 active change, 1 archived change"
+        );
+    }
+
+    #[test]
+    fn local_planning_inventory_ignores_dot_entries() {
+        let temp = tempfile::tempdir().unwrap();
+        let speckit = temp.path().join("speckit");
+        std::fs::create_dir_all(speckit.join("specs/.hidden")).unwrap();
+        std::fs::write(speckit.join("specs/.hidden/spec.md"), "# Hidden\n").unwrap();
+        std::fs::create_dir_all(speckit.join("changes/.scratch")).unwrap();
+        std::fs::create_dir_all(speckit.join("changes/archive/.stale")).unwrap();
+
+        let inventory = local_planning_inventory(temp.path());
+        assert!(inventory.is_empty());
+        assert_eq!(inventory.specs, 0);
+        assert_eq!(inventory.active_changes, 0);
+        assert_eq!(inventory.archived_changes, 0);
+    }
+
+    #[test]
+    fn local_planning_inventory_reports_unreadable_directories() {
+        let temp = tempfile::tempdir().unwrap();
+        let speckit = temp.path().join("speckit");
+        std::fs::create_dir_all(&speckit).unwrap();
+        // A file where `changes/` should be a directory makes discovery fail.
+        std::fs::write(speckit.join("changes"), "not a directory").unwrap();
+
+        let inventory = local_planning_inventory(temp.path());
+        assert!(inventory.unreadable);
+        assert!(!inventory.is_empty());
+        assert!(inventory.summary().contains("could not be read"));
     }
 
     #[test]

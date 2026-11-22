@@ -5,7 +5,9 @@
 use serde::{Deserialize, Serialize};
 use speckit_core::root_selection::{ResolveSpeckitRootOptions, resolve_speckit_root};
 
-use crate::shared_gather::{StoreDiagnostic, gather_relationship_data};
+use crate::shared_gather::{
+    StoreDiagnostic, gather_relationship_data, local_planning_shadow_status,
+};
 use crate::shared_output::print_json;
 
 /// Health report for the Speckit root.
@@ -122,11 +124,15 @@ pub async fn doctor_command(store: Option<&str>, json: bool) -> anyhow::Result<(
         })
         .collect();
 
+    let status: Vec<StoreDiagnostic> = local_planning_shadow_status(&resolved_root)
+        .into_iter()
+        .collect();
+
     let health = RelationshipHealth {
         root: root_health,
         store: store_health,
         references,
-        status: Vec::new(),
+        status,
     };
 
     if json {

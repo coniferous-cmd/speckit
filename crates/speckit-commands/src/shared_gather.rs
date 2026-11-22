@@ -8,6 +8,31 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 pub use crate::shared_output::StoreDiagnostic;
+use speckit_core::project_config::resolve_config_file_path as resolve_declaring_config_path;
+use speckit_core::root_selection::{
+    ResolvedSpeckitRoot, SpeckitRootSource, find_declaring_project_root, local_planning_inventory,
+    local_planning_shadowed,
+};
+
+/// The warning to report when the resolved root came from a project's declared
+/// store and that project still holds local planning content.
+///
+/// Returns `None` for explicit `--store` selections, global defaults, local
+/// roots, and projects whose local planning directories are empty.
+pub fn local_planning_shadow_status(root: &ResolvedSpeckitRoot) -> Option<StoreDiagnostic> {
+    if root.source != SpeckitRootSource::ConfigPointer {
+        return None;
+    }
+    let store_id = root.store_id.as_deref()?;
+    let cwd = std::env::current_dir().ok()?;
+    let project_root = find_declaring_project_root(store_id, &cwd)?;
+    let inventory = local_planning_inventory(&project_root);
+    if inventory.is_empty() {
+        return None;
+    }
+    let config_path = resolve_declaring_config_path(&project_root);
+    Some(local_planning_shadowed(&inventory, config_path.as_deref()).into())
+}
 
 /// A snapshot of the store registry: the registered store entries and
 /// whether the registry file itself was readable.
@@ -221,6 +246,7 @@ fn warning(code: &str, message: String, fix: &str) -> StoreDiagnostic {
         severity: "warning".to_string(),
         code: code.to_string(),
         message,
+        target: None,
         fix: Some(fix.to_string()),
     }
 }
@@ -279,6 +305,7 @@ pub async fn inspect_speckit_root(project_root: &str) -> SpeckitRootInspection {
             severity: "error".to_string(),
             code: "speckit_dir_missing".to_string(),
             message: "speckit/ directory not found".to_string(),
+            target: None,
             fix: Some("Run `speckit init` to initialize this project.".to_string()),
         });
         healthy = false;
@@ -288,6 +315,7 @@ pub async fn inspect_speckit_root(project_root: &str) -> SpeckitRootInspection {
                 severity: "warning".to_string(),
                 code: "project_md_missing".to_string(),
                 message: "project.md not found in speckit/".to_string(),
+                target: None,
                 fix: None,
             });
         }
@@ -296,6 +324,7 @@ pub async fn inspect_speckit_root(project_root: &str) -> SpeckitRootInspection {
                 severity: "warning".to_string(),
                 code: "specs_dir_missing".to_string(),
                 message: "specs/ directory not found".to_string(),
+                target: None,
                 fix: None,
             });
         }
@@ -304,6 +333,7 @@ pub async fn inspect_speckit_root(project_root: &str) -> SpeckitRootInspection {
                 severity: "warning".to_string(),
                 code: "changes_dir_missing".to_string(),
                 message: "changes/ directory not found".to_string(),
+                target: None,
                 fix: None,
             });
         }
