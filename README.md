@@ -136,13 +136,43 @@ speckit completion install powershell
 
 ```
 speckit/
-├── Cargo.toml                   # Workspace manifest
+├── Cargo.toml                    # Workspace manifest (three crates)
 ├── crates/
-│   ├── speckit-cli/             # Binary crate (CLI entry point)
-│   ├── speckit-core/            # Core library (schemas, parsers, validation, adapters)
-│   ├── speckit-commands/        # Command implementations + artifact templates
-└── .github/workflows/ci.yml    # CI: fmt, clippy, build, test on Linux/macOS/Windows
+│   ├── speckit-cli/              # Binary crate (CLI entry point, package name `speckit`)
+│   ├── speckit-core/             # Core library: schemas, parsers, validation, store,
+│   │                             #   workflow templates, AI tool adapters, skill generation
+│   └── speckit-commands/         # Command implementations (one module per subcommand)
+├── schemas/                      # Built-in workflow schemas shipped beside the binary
+│   └── spec-driven/              #   schema.yaml + artifact templates (proposal/design/specs/tasks)
+├── npm/                          # npm wrapper + per-platform binary packages (filled at release)
+├── docs/                         # Migration and operational notes
+├── speckit/                      # This repo's own Speckit root (config.yaml; local, gitignored)
+└── .github/workflows/
+    ├── ci.yml                    # fmt, clippy, build, test on Linux/macOS/Windows
+    └── release.yml               # tag-triggered: verify, build, GitHub Release, npm publish
 ```
+
+Dependency flow: `speckit-cli` → `speckit-commands` → `speckit-core`.
+
+### Contributing
+
+Run the same sequence CI runs before pushing:
+
+```bash
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets --all-features -- -A warnings -A clippy::invalid_regex
+cargo build --workspace --all-targets --all-features
+cargo test --workspace --all-features --no-fail-fast
+```
+
+If you edit a workflow template (`crates/speckit-core/src/templates/workflows/text/*.md`), the shared project-root guard, or the skill frontmatter, refresh the parity fixtures in the same commit:
+
+```bash
+cargo run -p speckit-core --example parity_hashes   # copy every DRIFT hash into parity_fixture_hashes()
+cargo test -p speckit-core --test skill_parity
+```
+
+See [CLAUDE.md](CLAUDE.md) for the full conventions.
 
 ## License
 

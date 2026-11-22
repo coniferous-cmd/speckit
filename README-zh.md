@@ -136,13 +136,43 @@ speckit completion install powershell
 
 ```
 speckit/
-├── Cargo.toml                   # 工作区清单
+├── Cargo.toml                    # 工作区清单（三个 crate）
 ├── crates/
-│   ├── speckit-cli/             # 二进制包（CLI 入口）
-│   ├── speckit-core/            # 核心库（模式、解析器、验证器、适配器）
-│   ├── speckit-commands/        # 命令实现和产物模板
-└── .github/workflows/ci.yml     # CI：在 Linux/macOS/Windows 上执行 fmt、clippy、构建和测试
+│   ├── speckit-cli/              # 二进制包（CLI 入口，包名 `speckit`）
+│   ├── speckit-core/             # 核心库：模式、解析器、验证器、存储库、
+│   │                             #   工作流模板、AI 工具适配器、技能生成
+│   └── speckit-commands/         # 命令实现（每个子命令一个模块）
+├── schemas/                      # 内置工作流模式，随二进制一起发布
+│   └── spec-driven/              #   schema.yaml + 产物模板（proposal/design/specs/tasks）
+├── npm/                          # npm 包装包 + 各平台二进制包（发布时填充）
+├── docs/                         # 迁移与运维说明
+├── speckit/                      # 本仓库自己的 Speckit 根目录（config.yaml；本地，已 gitignore）
+└── .github/workflows/
+    ├── ci.yml                    # 在 Linux/macOS/Windows 上执行 fmt、clippy、构建和测试
+    └── release.yml               # 打 tag 触发：验证、构建、GitHub Release、npm 发布
 ```
+
+依赖方向：`speckit-cli` → `speckit-commands` → `speckit-core`。
+
+### 参与贡献
+
+推送前请运行与 CI 相同的检查：
+
+```bash
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets --all-features -- -A warnings -A clippy::invalid_regex
+cargo build --workspace --all-targets --all-features
+cargo test --workspace --all-features --no-fail-fast
+```
+
+如果修改了工作流模板（`crates/speckit-core/src/templates/workflows/text/*.md`）、共享的 project-root guard 或技能 frontmatter，必须在同一个提交里刷新 parity 基准哈希：
+
+```bash
+cargo run -p speckit-core --example parity_hashes   # 把每个 DRIFT 哈希复制到 parity_fixture_hashes()
+cargo test -p speckit-core --test skill_parity
+```
+
+完整约定见 [CLAUDE.md](CLAUDE.md)。
 
 ## 许可证
 
