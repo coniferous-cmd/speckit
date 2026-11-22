@@ -11,6 +11,7 @@ use crate::store::foundation::{
     validate_store_id,
 };
 use crate::store::registry::get_store_root;
+use crate::utils::{item_discovery::discover_items, spec_discovery::discover_spec_files};
 
 // ---------------------------------------------------------------------------
 // Types
@@ -440,12 +441,18 @@ fn resolve_nearest_or_declared_root(
     global_data_dir: Option<&Path>,
 ) -> Result<ResolvedSpeckitRoot, RootSelectionError> {
     let classification = classify_speckit_dir(nearest_root);
+    let pointer = classification.pointer;
+    if (pointer.value.is_some() || pointer.malformed.is_some())
+        && has_local_planning_content(nearest_root)
+    {
+        return Ok(make_root(nearest_root, SpeckitRootSource::Nearest, None));
+    }
+
     // Local planning roots have historically worked with an unreadable config.
-    if let Some(reason) = classification.pointer.malformed
+    if let Some(reason) = pointer.malformed
         && (!classification.has_planning_shape || reason != "unparseable")
     {
-        let file = classification
-            .pointer
+        let file = pointer
             .file_path
             .map(|path| path.display().to_string())
             .unwrap_or_else(|| "speckit/config.yaml".to_string());
@@ -462,12 +469,24 @@ fn resolve_nearest_or_declared_root(
         ));
     }
 
-    if let Some(store_id) = classification.pointer.value {
+    if let Some(store_id) = pointer.value {
         return resolve_store_root(&store_id, global_data_dir, SpeckitRootSource::ConfigPointer);
     }
 
     // No store pointer found — treat as a local root.
     Ok(make_root(nearest_root, SpeckitRootSource::Nearest, None))
+}
+
+fn has_local_planning_content(project_root: &Path) -> bool {
+    let speckit = project_root.join("speckit");
+    // Keep an unreadable local inventory local instead of redirecting writes.
+    discover_items(&speckit, "changes").map_or(true, |changes| {
+        changes
+            .iter()
+            .any(|name| name != "archive" && !name.starts_with('.'))
+    }) || discover_items(&speckit.join("changes/archive"), "archive").map_or(true, |changes| {
+        changes.iter().any(|name| !name.starts_with('.'))
+    }) || discover_spec_files(&speckit.join("specs")).map_or(true, |specs| !specs.is_empty())
 }
 
 fn resolve_default_store_root(

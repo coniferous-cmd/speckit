@@ -123,7 +123,7 @@ speckit store setup my-store --path ~/speckit/my-store  # Create and register a 
 speckit store list                                    # List registered stores
 ```
 
-When run from a code project with an existing `speckit/config.yaml` (or `config.yml`), `store setup` fills in its `store` field. An existing `store` value is preserved. Speckit commands in that project use the configured store by default, with `--store <id>` available as an override.
+When run from a code project with an existing `speckit/config.yaml` (or `config.yml`), `store setup` fills in its `store` field. An existing `store` value is preserved. Speckit uses the local root when it contains specs, active changes, or archived changes. If the local directories are empty, Speckit uses the configured store. Use `--store <id>` to select a store explicitly.
 
 ## Shell Completions
 

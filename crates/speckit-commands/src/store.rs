@@ -136,7 +136,7 @@ pub async fn store_setup(
             Ok(true) => result.diagnostics.push(make_store_diagnostic(
                 StoreDiagnosticSeverity::Info,
                 "store_project_linked",
-                format!("Set store '{id}' as the project default in {config}."),
+                format!("Set store '{id}' as the project fallback in {config}."),
                 Some("store.pointer".into()),
                 None,
             )),

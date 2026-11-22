@@ -163,13 +163,14 @@ fn setup_is_visible_to_context() {
 }
 
 #[test]
-fn setup_links_an_existing_project_config_to_the_external_store() {
+fn setup_links_a_store_as_the_fallback_for_local_planning() {
     let temp = TempDir::new().unwrap();
     let project = temp.path().join("code");
     let store = temp.path().join("planning");
     let config = project.join("speckit/config.yaml");
     std::fs::create_dir_all(project.join("speckit/specs")).unwrap();
-    std::fs::create_dir_all(project.join("speckit/changes/local-change")).unwrap();
+    std::fs::create_dir_all(project.join("speckit/changes/archive")).unwrap();
+    std::fs::write(project.join("speckit/specs/.gitkeep"), "").unwrap();
     let original = "# Project configuration\nschema: spec-driven\ncontext: |-\n  Project context.";
     std::fs::write(&config, original).unwrap();
 
@@ -206,7 +207,41 @@ fn setup_links_an_existing_project_config_to_the_external_store() {
             .join("speckit/changes/external-change/.speckit.yaml")
             .is_file()
     );
-    assert!(project.join("speckit/changes/local-change").is_dir());
+    assert!(!project.join("speckit/changes/external-change").exists());
+
+    let assert_local_root = || {
+        let context = success(&project, &["context", "--json"]);
+        assert!(context["root"].get("storeId").is_none());
+        assert_eq!(
+            Path::new(context["root"]["path"].as_str().unwrap())
+                .canonicalize()
+                .unwrap(),
+            project.canonicalize().unwrap(),
+        );
+    };
+    let spec = project.join("speckit/specs/local-capability/spec.md");
+    std::fs::create_dir_all(spec.parent().unwrap()).unwrap();
+    std::fs::write(&spec, "# Local spec\n").unwrap();
+    assert_local_root();
+    std::fs::remove_file(&spec).unwrap();
+
+    let archive = project.join("speckit/changes/archive/archived-change");
+    std::fs::create_dir(&archive).unwrap();
+    assert_local_root();
+    std::fs::remove_dir(&archive).unwrap();
+
+    std::fs::create_dir(project.join("speckit/changes/local-change")).unwrap();
+    assert_local_root();
+    success(
+        &project,
+        &["new", "change", "another-local-change", "--json"],
+    );
+    assert!(
+        project
+            .join("speckit/changes/another-local-change/.speckit.yaml")
+            .is_file()
+    );
+    assert!(!store.join("speckit/changes/another-local-change").exists());
 
     let retry = success(&project, &args);
     assert_eq!(retry["registry"]["alreadyRegistered"], true);

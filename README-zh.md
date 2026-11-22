@@ -123,7 +123,7 @@ speckit store setup my-store --path ~/speckit/my-store  # 创建并注册存储�
 speckit store list                                    # 列出已注册的存储库
 ```
 
-从代码项目内执行 `store setup` 时，命令会把新 store 的 ID 写入已有的 `speckit/config.yaml`（或 `config.yml`）的 `store` 字段。已有的 `store` 值会保留。项目中的 Speckit 命令默认使用配置指定的 store，可用 `--store <id>` 临时覆盖。
+从代码项目内执行 `store setup` 时，命令会把新 store 的 ID 写入已有的 `speckit/config.yaml`（或 `config.yml`）的 `store` 字段。已有的 `store` 值会保留。项目有本地规范、进行中的变更或已归档的变更时优先使用本地。只有空目录时，命令会使用配置指定的 store。可以用 `--store <id>` 临时指定 store。
 
 ## Shell 补全
 

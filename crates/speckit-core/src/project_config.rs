@@ -61,7 +61,7 @@ pub struct ProjectConfig {
     /// Optional: per-operation advisory guidance.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub operations: Option<OperationsConfig>,
-    /// Optional: declared default store for this project.
+    /// Optional: store to use when the project has no local specs or changes.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub store: Option<String>,
     /// Optional: GitHub Copilot integration preferences.
