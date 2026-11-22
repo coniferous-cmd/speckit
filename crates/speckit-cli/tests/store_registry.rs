@@ -159,6 +159,107 @@ fn setup_is_visible_to_context() {
     );
     let context = success(temp.path(), &["context", "--store", "team", "--json"]);
     assert_eq!(context["root"]["storeId"], "team");
+    assert!(!temp.path().join("speckit/config.yaml").exists());
+}
+
+#[test]
+fn setup_links_an_existing_project_config_to_the_external_store() {
+    let temp = TempDir::new().unwrap();
+    let project = temp.path().join("code");
+    let store = temp.path().join("planning");
+    let config = project.join("speckit/config.yaml");
+    std::fs::create_dir_all(project.join("speckit/specs")).unwrap();
+    std::fs::create_dir_all(project.join("speckit/changes/local-change")).unwrap();
+    let original = "# Project configuration\nschema: spec-driven\ncontext: |-\n  Project context.";
+    std::fs::write(&config, original).unwrap();
+
+    let args = [
+        "store",
+        "setup",
+        "team",
+        "--path",
+        store.to_str().unwrap(),
+        "--json",
+    ];
+    let setup = success(&project, &args);
+    assert_eq!(setup["status"][0]["code"], "store_project_linked");
+    let linked = format!("{original}\nstore: team\n");
+    assert_eq!(std::fs::read_to_string(&config).unwrap(), linked);
+    assert!(
+        !std::fs::read_to_string(store.join("speckit/config.yaml"))
+            .unwrap()
+            .contains("store:")
+    );
+
+    let context = success(&project, &["context", "--json"]);
+    assert_eq!(context["root"]["storeId"], "team");
+    assert_eq!(
+        Path::new(context["root"]["path"].as_str().unwrap())
+            .canonicalize()
+            .unwrap(),
+        store.canonicalize().unwrap()
+    );
+    let created = success(&project, &["new", "change", "external-change", "--json"]);
+    assert_eq!(created["change"]["id"], "external-change");
+    assert!(
+        store
+            .join("speckit/changes/external-change/.speckit.yaml")
+            .is_file()
+    );
+    assert!(project.join("speckit/changes/local-change").is_dir());
+
+    let retry = success(&project, &args);
+    assert_eq!(retry["registry"]["alreadyRegistered"], true);
+    assert_eq!(std::fs::read_to_string(&config).unwrap(), linked);
+
+    let other = temp.path().join("other");
+    let second = success(
+        &project,
+        &[
+            "store",
+            "setup",
+            "other",
+            "--path",
+            other.to_str().unwrap(),
+            "--json",
+        ],
+    );
+    assert_eq!(second["registry"]["registered"], true);
+    assert_eq!(second["status"][0]["code"], "store_project_link_skipped");
+    assert_eq!(std::fs::read_to_string(&config).unwrap(), linked);
+    let explicit = success(&project, &["context", "--store", "other", "--json"]);
+    assert_eq!(explicit["root"]["storeId"], "other");
+}
+
+#[test]
+fn setup_supports_flow_config_and_yaml_like_store_ids() {
+    let temp = TempDir::new().unwrap();
+    let project = temp.path().join("code");
+    let store = temp.path().join("planning");
+    let config = project.join("speckit/config.yml");
+    std::fs::create_dir_all(config.parent().unwrap()).unwrap();
+    std::fs::write(&config, "{schema: spec-driven, context: hello}\n").unwrap();
+
+    success(
+        &project,
+        &[
+            "store",
+            "setup",
+            "123",
+            "--path",
+            store.to_str().unwrap(),
+            "--json",
+        ],
+    );
+    let linked = speckit_core::project_config::read_project_config(&project).unwrap();
+    assert_eq!(linked.schema, "spec-driven");
+    assert_eq!(linked.context.as_deref(), Some("hello"));
+    assert_eq!(linked.store.as_deref(), Some("123"));
+    assert_eq!(
+        success(&project, &["context", "--json"])["root"]["storeId"],
+        "123"
+    );
+    assert!(!project.join("speckit/config.yaml").exists());
 }
 
 #[test]

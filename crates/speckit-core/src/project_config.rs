@@ -3,6 +3,11 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::file_state::{
+    LockErrorData, acquire_file_lock, make_lock_error_factory, release_file_lock,
+    replace_file_atomically,
+};
+
 /// Hard limit on the context field size (50 KB), shared with the references index.
 pub const MAX_CONTEXT_SIZE: usize = 50 * 1024;
 
@@ -56,9 +61,7 @@ pub struct ProjectConfig {
     /// Optional: per-operation advisory guidance.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub operations: Option<OperationsConfig>,
-    /// Optional: declared default store.  Only consulted by root resolution
-    /// when this `speckit/` directory is config-only (no `specs/` or
-    /// `changes/`).
+    /// Optional: declared default store for this project.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub store: Option<String>,
     /// Optional: GitHub Copilot integration preferences.
@@ -133,6 +136,64 @@ pub fn resolve_config_file_path(project_root: &Path) -> Option<PathBuf> {
         return Some(yml_path);
     }
     None
+}
+
+/// Add a store to an existing project config without replacing a prior choice.
+pub fn link_project_store(config_path: &Path, id: &str) -> anyhow::Result<bool> {
+    let config_path = dunce::canonicalize(config_path)?;
+    let lock_path = config_path.with_extension("lock");
+    let lock_error = make_lock_error_factory(LockErrorData {
+        create_subject: "the project config lock file".into(),
+        busy_message: "Project config is busy.".into(),
+        code: "project_config_lock_failed".into(),
+        target: "store.pointer".into(),
+    });
+    let lock = acquire_file_lock(&lock_path, &lock_error)?;
+    let result = add_store_to_config(&config_path, id);
+    release_file_lock(lock);
+    result
+}
+
+fn add_store_to_config(config_path: &Path, id: &str) -> anyhow::Result<bool> {
+    use serde_yaml::{Mapping, Value};
+
+    let original = fs::read_to_string(config_path)?;
+    let mut config = match serde_yaml::from_str::<Value>(&original)? {
+        Value::Mapping(mapping) => mapping,
+        Value::Null => Mapping::new(),
+        _ => anyhow::bail!("Project config must be a YAML mapping."),
+    };
+
+    let key = Value::String("store".into());
+    let value = Value::String(id.to_owned());
+    match config.get(&key) {
+        Some(existing) if *existing == value => return Ok(false),
+        Some(Value::String(existing)) => {
+            anyhow::bail!("The project already declares store '{existing}'.");
+        }
+        Some(_) => {
+            anyhow::bail!("The project already has a store field. It must be a store ID string.")
+        }
+        None => {}
+    }
+
+    let store_line = serde_yaml::to_string(&Mapping::from_iter([(key.clone(), value.clone())]))?;
+    config.insert(key, value);
+    let separator = if original.is_empty() || original.ends_with('\n') {
+        ""
+    } else {
+        "\n"
+    };
+    // Keep the original text when inserting a top-level key preserves its values.
+    let updated = [
+        format!("{original}{separator}{store_line}"),
+        format!("{store_line}{original}"),
+    ]
+    .into_iter()
+    .find(|text| matches!(serde_yaml::from_str::<Mapping>(text), Ok(mapping) if mapping == config))
+    .map_or_else(|| serde_yaml::to_string(&config), Ok)?;
+    replace_file_atomically(config_path, &updated)?;
+    Ok(true)
 }
 
 /// Human rendering of a malformed pointer reason, shared by every surface.
@@ -252,9 +313,7 @@ fn is_dir(path: &Path) -> bool {
     fs::metadata(path).map(|m| m.is_dir()).unwrap_or(false)
 }
 
-/// One classification for "real root vs config-only pointer dir", shared by
-/// root resolution and the init pointer guard so they can never disagree
-/// (slice 3.2).
+/// Inspect the local planning directories and the configured store pointer.
 pub fn classify_speckit_dir(project_root: &Path) -> SpeckitDirClassification {
     let speckit_dir = project_root.join("speckit");
     let has_planning_shape =

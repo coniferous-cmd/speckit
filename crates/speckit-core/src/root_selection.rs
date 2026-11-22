@@ -439,18 +439,11 @@ fn resolve_nearest_or_declared_root(
     nearest_root: &Path,
     global_data_dir: Option<&Path>,
 ) -> Result<ResolvedSpeckitRoot, RootSelectionError> {
-    let speckit = nearest_root.join("speckit");
-    let has_planning_shape = speckit.join("specs").is_dir() || speckit.join("changes").is_dir();
-
-    if has_planning_shape {
-        // A real planning root wins; any config pointer is ignored with a warning.
-        return Ok(make_root(nearest_root, SpeckitRootSource::Nearest, None));
-    }
-
-    // Config-only directory — use the shared targeted parser so malformed
-    // pointers cannot silently redirect work to the local directory.
     let classification = classify_speckit_dir(nearest_root);
-    if let Some(reason) = classification.pointer.malformed {
+    // Local planning roots have historically worked with an unreadable config.
+    if let Some(reason) = classification.pointer.malformed
+        && (!classification.has_planning_shape || reason != "unparseable")
+    {
         let file = classification
             .pointer
             .file_path
@@ -526,10 +519,7 @@ pub fn is_store_selected_root(root: &ResolvedSpeckitRoot) -> bool {
 pub fn find_declaring_project_root(store_id: &str, start_path: &Path) -> Option<PathBuf> {
     let nearest = find_qualifying_root_sync(&canonical_directory(start_path))?;
     let classification = classify_speckit_dir(&nearest);
-    (!classification.has_planning_shape
-        && classification.pointer.malformed.is_none()
-        && classification.pointer.value.as_deref() == Some(store_id))
-    .then_some(nearest)
+    (classification.pointer.value.as_deref() == Some(store_id)).then_some(nearest)
 }
 
 /// Emits a human-readable banner to stderr when a store root was selected.

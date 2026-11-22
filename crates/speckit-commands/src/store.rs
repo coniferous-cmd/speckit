@@ -1,6 +1,9 @@
 //! Store commands share the core registry and identity implementation with root selection.
 
 use serde_json::{Value, json};
+use speckit_core::planning_home::find_repo_planning_root_sync;
+use speckit_core::project_config::{link_project_store, resolve_config_file_path};
+use speckit_core::store::errors::{StoreDiagnosticSeverity, make_store_diagnostic};
 use speckit_core::store::{StoreError, operations as core};
 
 use crate::shared_output::print_json;
@@ -107,6 +110,9 @@ pub async fn store_setup(
         remote,
     };
     let prepared = finish(core::prepare_store_setup(&input), json, mutation_empty())?;
+    let project_root = std::env::current_dir()
+        .ok()
+        .and_then(|cwd| find_repo_planning_root_sync(Some(&cwd)));
     let init_git = core::resolve_setup_git_enabled(&prepared, init_git);
     if interactive(json) {
         confirm(&format!(
@@ -115,11 +121,37 @@ pub async fn store_setup(
             prepared.root.display()
         ))?;
     }
-    let result = finish(
+    let mut result = finish(
         core::setup_prepared_store(&prepared, Some(init_git)),
         json,
         mutation_empty(),
     )?;
+    if let Some(project_root) = project_root
+        && project_root != result.store.root
+        && let Some(config_path) = resolve_config_file_path(&project_root)
+    {
+        let id = &result.store.id;
+        let config = config_path.display();
+        match link_project_store(&config_path, id) {
+            Ok(true) => result.diagnostics.push(make_store_diagnostic(
+                StoreDiagnosticSeverity::Info,
+                "store_project_linked",
+                format!("Set store '{id}' as the project default in {config}."),
+                Some("store.pointer".into()),
+                None,
+            )),
+            Ok(false) => {}
+            Err(error) => result.diagnostics.push(make_store_diagnostic(
+                StoreDiagnosticSeverity::Warning,
+                "store_project_link_skipped",
+                format!("Store '{id}' is registered. Could not link {config}: {error}"),
+                Some("store.pointer".into()),
+                Some(format!(
+                    "Use --store {id} or edit the store field in {config}."
+                )),
+            )),
+        }
+    }
     print_mutation(&result, json, "Store ready");
     Ok(())
 }

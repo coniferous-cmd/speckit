@@ -47,7 +47,8 @@ pub async fn context_command(
     code_workspace: Option<&str>,
     force: bool,
 ) -> anyhow::Result<()> {
-    let project_root = crate::change::resolve_project_root(store).await?;
+    let root = crate::change::resolve_command_root(store, true)?;
+    let project_root = root.path.to_string_lossy().into_owned();
 
     let data = gather_relationship_data(&project_root).await;
 
@@ -73,7 +74,7 @@ pub async fn context_command(
     let working_set = WorkingSet {
         root: WorkingSetRoot {
             path: project_root.clone(),
-            store_id: store.map(|s| s.to_string()),
+            store_id: root.store_id,
         },
         members,
         status: Vec::new(),

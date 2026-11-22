@@ -119,9 +119,11 @@ speckit config set <key> <value> # 设置一个值
 独立的 Speckit 仓库可被注册、共享，并独立于项目进行管理。工作集（Workset）可将多个存储库中的文件夹组合成个人工作视图。
 
 ```bash
-speckit store setup    # 注册一个存储库
-speckit store list     # 列出已注册的存储库
+speckit store setup my-store --path ~/speckit/my-store  # 创建并注册存储库
+speckit store list                                    # 列出已注册的存储库
 ```
+
+从代码项目内执行 `store setup` 时，命令会把新 store 的 ID 写入已有的 `speckit/config.yaml`（或 `config.yml`）的 `store` 字段。已有的 `store` 值会保留。项目中的 Speckit 命令默认使用配置指定的 store，可用 `--store <id>` 临时覆盖。
 
 ## Shell 补全
 

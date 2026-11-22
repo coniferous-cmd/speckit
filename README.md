@@ -119,9 +119,11 @@ speckit config set <key> <value> # Set a value
 Standalone Speckit repos can be registered, shared, and managed independently of the project. Worksets provide personal working views that compose folders across stores.
 
 ```bash
-speckit store setup    # Register a store
-speckit store list     # List registered stores
+speckit store setup my-store --path ~/speckit/my-store  # Create and register a store
+speckit store list                                    # List registered stores
 ```
+
+When run from a code project with an existing `speckit/config.yaml` (or `config.yml`), `store setup` fills in its `store` field. An existing `store` value is preserved. Speckit commands in that project use the configured store by default, with `--store <id>` available as an override.
 
 ## Shell Completions
 

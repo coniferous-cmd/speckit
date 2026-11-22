@@ -93,6 +93,18 @@ pub fn path_is_directory(path: &Path) -> bool {
 /// then renaming. The temp file sits in the same directory as the target
 /// so the rename is guaranteed to be atomic on the same filesystem.
 pub fn write_file_atomically(path: &Path, content: &str) -> Result<(), std::io::Error> {
+    write_atomically(path, content, None)
+}
+
+pub(crate) fn replace_file_atomically(path: &Path, content: &str) -> std::io::Result<()> {
+    write_atomically(path, content, Some(fs::metadata(path)?.permissions()))
+}
+
+fn write_atomically(
+    path: &Path,
+    content: &str,
+    permissions: Option<fs::Permissions>,
+) -> std::io::Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
@@ -117,6 +129,9 @@ pub fn write_file_atomically(path: &Path, content: &str) -> Result<(), std::io::
         opts.mode(0o600);
         let mut file = opts.open(&temp_path)?;
         file.write_all(content.as_bytes())?;
+        if let Some(permissions) = permissions {
+            file.set_permissions(permissions)?;
+        }
         file.sync_all()?;
         fs::rename(&temp_path, path)?;
         Ok(())
