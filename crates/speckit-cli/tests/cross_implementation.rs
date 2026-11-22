@@ -851,6 +851,60 @@ fn archive_json_moves_completed_change_and_preserves_failed_changes() {
 }
 
 #[test]
+fn update_without_force_refreshes_body_edited_under_same_version() {
+    let (_temp, project, _nested, config_home, data_home) = fixture();
+    let initialized = run_cli(
+        &project,
+        &config_home,
+        &data_home,
+        &["init", ".", "--tools", "claude", "--force"],
+    );
+    assert!(
+        initialized.status.success(),
+        "init failed: {}",
+        String::from_utf8_lossy(&initialized.stderr)
+    );
+
+    let managed = project.join(".claude/skills/speckit-explore/SKILL.md");
+    let pristine = std::fs::read_to_string(&managed).unwrap();
+    // Simulate a template edit shipped under the same CLI version: the
+    // frontmatter (generatedBy) is untouched, only the body differs.
+    let edited = pristine.replacen(
+        "\n---\n\n",
+        "\n---\n\nStale guidance from an older build.\n",
+        1,
+    );
+    assert_ne!(edited, pristine);
+    std::fs::write(&managed, &edited).unwrap();
+
+    let updated = run_cli(&project, &config_home, &data_home, &["update", "."]);
+    assert!(
+        updated.status.success(),
+        "update failed: {}",
+        String::from_utf8_lossy(&updated.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&updated.stdout);
+    assert!(
+        !stdout.contains("All tools up to date"),
+        "update must not report up to date when a body drifted:\n{stdout}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&managed).unwrap(),
+        pristine,
+        "update without --force must restore the drifted body"
+    );
+
+    // A second run is a genuine no-op.
+    let again = run_cli(&project, &config_home, &data_home, &["update", "."]);
+    assert!(again.status.success());
+    assert!(
+        String::from_utf8_lossy(&again.stdout).contains("All tools up to date"),
+        "second update should be a no-op:\n{}",
+        String::from_utf8_lossy(&again.stdout)
+    );
+}
+
+#[test]
 fn init_and_update_keep_managed_skills_in_sync_without_touching_custom_skills() {
     let (_temp, project, _nested, config_home, data_home) = fixture();
 

@@ -7,7 +7,6 @@
 //! Speckit template.
 
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
 
 /// Skill template with directory name and workflow ID mapping.
 ///
@@ -176,7 +175,10 @@ pub fn get_command_contents(
 ///
 /// `generated_by_version` is embedded as `metadata.generatedBy` so the version
 /// that produced the file can be detected later (used by update to decide
-/// whether to regenerate).
+/// whether to regenerate). `metadata.contentHash` is the SHA-256 of the
+/// emitted body (normalised like the parity fixtures); update compares it so
+/// a template edited between releases is still detected as stale even though
+/// `generatedBy` did not change.
 ///
 /// `transform_instructions` is applied to the template body before emission;
 /// the surface-specific generators use it to swap `/specx:*` -> `/speckit:*`
@@ -224,11 +226,37 @@ pub fn generate_skill_content(
         "  generatedBy: \"{}\"\n",
         escape_yaml_string(generated_by_version)
     ));
+    // The body is everything after the frontmatter: the instructions plus the
+    // trailing newline. Hash the body alone so the hash never depends on its
+    // own frontmatter field.
+    let body = format!("{instructions}\n");
+    out.push_str(&format!("  contentHash: \"{}\"\n", parity_hash(&body)));
     out.push_str("---\n");
     out.push('\n');
-    out.push_str(&instructions);
-    out.push('\n');
+    out.push_str(&body);
     out
+}
+
+/// The body of a generated skill file: everything after the closing
+/// frontmatter delimiter and the blank line that follows it. Returns `None`
+/// when the content has no frontmatter block.
+pub fn skill_body(content: &str) -> Option<&str> {
+    let rest = content.strip_prefix("---\n")?;
+    let end = rest.find("\n---\n")?;
+    Some(&rest[end + "\n---\n".len()..].trim_start_matches('\n'))
+}
+
+/// Whether an on-disk skill body still matches the `contentHash` recorded in
+/// its frontmatter. A file without a hash (generated before the field existed)
+/// is treated as mismatched so update regenerates it once.
+pub fn skill_body_matches_content_hash(content: &str) -> bool {
+    let Some(parsed) = parse_skill_frontmatter(content) else {
+        return false;
+    };
+    let Some(expected) = parsed.content_hash else {
+        return false;
+    };
+    skill_body(content).is_some_and(|body| parity_hash(body) == expected)
 }
 
 /// The `allowed-tools` frontmatter value emitted by Speckit.
@@ -279,6 +307,9 @@ pub struct ParsedSkillFrontmatter {
     pub name: String,
     pub generated_by: Option<String>,
     pub version: Option<String>,
+    /// SHA-256 of the body as emitted; absent on files generated before the
+    /// field existed.
+    pub content_hash: Option<String>,
 }
 
 /// Parses the YAML frontmatter from a generated `SKILL.md`.
@@ -294,6 +325,7 @@ pub fn parse_skill_frontmatter(content: &str) -> Option<ParsedSkillFrontmatter> 
     let mut name: Option<String> = None;
     let mut generated_by: Option<String> = None;
     let mut version: Option<String> = None;
+    let mut content_hash: Option<String> = None;
     let mut in_metadata = false;
 
     for line in fm.lines() {
@@ -321,6 +353,7 @@ pub fn parse_skill_frontmatter(content: &str) -> Option<ParsedSkillFrontmatter> 
         match k {
             "version" => version = Some(v.trim_matches('"').to_string()),
             "generatedBy" => generated_by = Some(v.trim_matches('"').to_string()),
+            "contentHash" => content_hash = Some(v.trim_matches('"').to_string()),
             _ => {}
         }
     }
@@ -329,6 +362,7 @@ pub fn parse_skill_frontmatter(content: &str) -> Option<ParsedSkillFrontmatter> 
         name: name?,
         generated_by,
         version,
+        content_hash,
     })
 }
 
@@ -386,78 +420,64 @@ pub const PARITY_BASELINE_VERSION: &str = "PARITY-BASELINE";
 /// skill's generated file content when rendered with `PARITY_BASELINE_VERSION`
 /// as the `generatedBy` value.
 ///
-/// These values are produced by running `regen-parity-hashes.mjs` against the
-/// current source. When a workflow template is intentionally changed, update
-/// the corresponding hash here and in the integration tests in
-/// `skill_parity.rs` simultaneously.
+/// These values are produced by `cargo run -p speckit-core --example
+/// parity_hashes` against the current source. When a workflow template (or the
+/// shared project-root guard) is intentionally changed, copy every DRIFT
+/// line's hash into this table in the same commit; the integration test
+/// `generated_content_hash_matches_fixture_for_every_workflow` in
+/// `skill_parity.rs` reads this table and fails until it is refreshed.
 pub fn parity_fixture_hashes() -> std::collections::HashMap<&'static str, &'static str> {
     let entries: [(&'static str, &'static str); 12] = [
         (
             "speckit-explore",
-            "88e1612ff9ad4aa0322cc73015efbec006dd66cfc94086cba4910be24c094deb",
+            "f738d1e4b3408e2f9ecf69477afca671a09df07624528572d7a3ceb812fe4a4b",
         ),
         (
             "speckit-new-change",
-            "36f8c6c21ddb9fe0308acc6fd0998e870cc7de4c1c2762ecd0dfe8582022a9df",
+            "88688af9b69fa72550f38e3a6ada1b0c5b7a0960266f84c3ea0e7849b07cd228",
         ),
         (
             "speckit-continue-change",
-            "0aade44dd759630a49de80a6f9de546620655892d3d9d115fd043de14b03febc",
+            "f4629459e49df09c32ab67d346c61c941dad0c7d267d49ea454b562aab755970",
         ),
         (
             "speckit-implement-change",
-            "bba06f496d9c43525b3169f125078a1d7f2ae7ac437c98320274d0be6f1cc127",
+            "4c2c55e7cecf638aa04fabeccd22723bb9f0e78f61708667322948b7eca67bdc",
         ),
         (
             "speckit-update-change",
-            "70ed063740386a196a65442ebd5ddfc619d9c880c8d288f131010e1684c5c950",
+            "ef85372b918075725718008d965f35e0fa39fc9aff36a3b7748d4f15df4577c2",
         ),
         (
             "speckit-ff-change",
-            "9170b4a8e301cfe5f45ef520b7cc9c325b7b75e10383b3236de0073028b9eda1",
+            "5dc37b2b3aef240c4c145d2380373eb806910de0d8552cc97f890909b8f12f5d",
         ),
         (
             "speckit-sync-specs",
-            "3e6622d8b1023efc7759fb5c4b3d65f380deb79640086f9c8740314cee7648c3",
+            "c88a96f085171ccf6f730f81969a655b58b2e7e752ae9256b18e8c9d3cfb4281",
         ),
         (
             "speckit-archive-change",
-            "62025dabf21b40be46b41c2c2a520035d3a8676780924e179feaf80e74b2af4f",
+            "0cb1463497a1d9290522aee9d0e3b76e9c1884eb3f110f79f9d5b890c93cffbd",
         ),
         (
             "speckit-bulk-archive-change",
-            "b5e1fecb057629b7e96a80f7d2b36ab043c211a7dfb50d234bf3d088977b690f",
+            "1340731cc0a077f062b905806f72f2e3016b9c12a59161fe9b486d6d9040b78c",
         ),
         (
             "speckit-verify-change",
-            "8f9a255e656830a32491b03fa898bace87901652f3746683f899ebace0a19e38",
+            "f3abbf577980d64ab744203c0eb33f544b22db5912a6a6d528e0c7f1cb30df7b",
         ),
         (
             "speckit-onboard",
-            "3b68bef27442febc399b31a849359fcf871a166920d77dff4dc8d4b1ed2cce4f",
+            "e69687299337a210f46a052ecfd84c35bb121aff88826ab7a0f59f44a28868af",
         ),
         (
             "speckit-propose",
-            "793074e2188902a48405f6458d1eaf41d71eb7bdf9961a81a6f0b208de89ba7c",
+            "fa9f7e0d555ba0c36ede3ea888ef29133c03d7ecc7e6a9220bf2a3d7051a68b9",
         ),
     ];
     entries.into_iter().collect()
-}
-
-/// Build the frontmatter-only metadata block used to detect managed skills
-/// during update. The map is sorted alphabetically so its hash is stable.
-pub fn frontmatter_metadata_for_hash(
-    template: &super::types::SkillTemplate,
-) -> HashMap<String, String> {
-    let mut out: HashMap<String, String> = HashMap::new();
-    if let Some(m) = &template.metadata {
-        for (k, v) in m {
-            out.insert(k.clone(), v.clone());
-        }
-    }
-    out.insert("generatedBy".into(), speckit_generated_by_version());
-    out.insert("tool".into(), "speckit".into());
-    out
 }
 
 #[cfg(test)]
@@ -536,6 +556,32 @@ mod tests {
         assert_eq!(parsed.name, template.name);
         assert_eq!(parsed.generated_by.as_deref(), Some("1.9.0"));
         assert_eq!(parsed.version.as_deref(), Some("1.0"));
+        assert_eq!(
+            parsed.content_hash.as_deref(),
+            Some(parity_hash(&format!("{}\n", template.instructions)).as_str())
+        );
+        assert!(skill_body_matches_content_hash(&content));
+    }
+
+    #[test]
+    fn content_hash_tracks_the_body_not_the_version() {
+        let all = get_skill_templates(None);
+        let template = &all[0].template;
+        let a = generate_skill_content(template, "1.9.0", None);
+        let b = generate_skill_content(template, "2.0.0", None);
+        let ha = parse_skill_frontmatter(&a).unwrap().content_hash;
+        let hb = parse_skill_frontmatter(&b).unwrap().content_hash;
+        assert_eq!(ha, hb, "same body must hash the same across versions");
+
+        // A body edited under the same version is detected as mismatched.
+        let edited = a.replace("Enter explore mode.", "Enter explore mode. (edited)");
+        assert_ne!(edited, a);
+        assert!(!skill_body_matches_content_hash(&edited));
+
+        // A file from before the field existed is treated as mismatched.
+        let legacy = a.replace(&format!("  contentHash: \"{}\"\n", ha.unwrap()), "");
+        assert!(!skill_body_matches_content_hash(&legacy));
+        assert_eq!(skill_body(&legacy), skill_body(&a));
     }
 
     #[test]

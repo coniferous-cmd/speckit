@@ -17,8 +17,66 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # Gate every release on the same checks CI runs, and on the tag matching
+  # the workspace version. Without this a red main (or a tag that forgot the
+  # version bump) could be built and published straight to npm.
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Resolve release tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+          fi
+          case "$TAG" in v*) ;; *) TAG="v${TAG}" ;; esac
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Tag must match the workspace version
+        run: |
+          TAG_VERSION="${{ steps.tag.outputs.version }}"
+          CARGO_VERSION=$(grep -m1 '^version = ' Cargo.toml | sed -E 's/version = "([^"]+)"/\1/')
+          if [ "$TAG_VERSION" != "$CARGO_VERSION" ]; then
+            echo "::error::Tag ${{ steps.tag.outputs.tag }} does not match Cargo.toml version $CARGO_VERSION. Bump [workspace.package] version (and Cargo.lock) before tagging."
+            exit 1
+          fi
+          LOCK_VERSION=$(grep -A1 '^name = "speckit"$' Cargo.lock | grep -m1 '^version = ' | sed -E 's/version = "([^"]+)"/\1/')
+          if [ "$LOCK_VERSION" != "$CARGO_VERSION" ]; then
+            echo "::error::Cargo.lock has speckit $LOCK_VERSION but Cargo.toml has $CARGO_VERSION. Run cargo build to refresh the lockfile."
+            exit 1
+          fi
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Run Clippy
+        run: cargo clippy --workspace --all-targets --all-features -- -A warnings -A clippy::invalid_regex
+
+      - name: Build workspace
+        run: cargo build --workspace --all-targets --all-features
+
+      - name: Run tests
+        run: cargo test --workspace --all-features --no-fail-fast
+
   build:
     name: Build (${{ matrix.target }})
+    needs: verify
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     strategy:

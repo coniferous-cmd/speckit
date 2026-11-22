@@ -120,8 +120,17 @@ impl UpdateCommand {
             return Ok(());
         }
 
+        // Resolve the profile filter so `init` and `update` always agree on the
+        // same set of skills to emit, and so the staleness check below looks at
+        // exactly the files the write path would produce.
+        let (_, workflow_filter) = resolve_profile_and_workflow_filter(None, Some(&resolved_path));
+
         // 7. Check version status for all configured tools
-        let tools_needing_update = self.check_version_status(&resolved_path, &configured_tools);
+        let tools_needing_update = self.check_version_status(
+            &resolved_path,
+            &configured_tools,
+            workflow_filter.as_deref(),
+        );
 
         // 8. Smart update detection
         if !self.force && tools_needing_update.is_empty() {
@@ -146,9 +155,6 @@ impl UpdateCommand {
         println!();
 
         // 10. Update tools
-        // Resolve the profile filter so `init` and `update` always agree on the
-        // same set of skills to emit.
-        let (_, workflow_filter) = resolve_profile_and_workflow_filter(None, Some(&resolved_path));
         let mut updated_tools = Vec::new();
         let mut failed_tools = Vec::new();
 
@@ -245,32 +251,69 @@ impl UpdateCommand {
             .collect()
     }
 
-    /// Check version status for configured tools.
+    /// Which configured tools have something to refresh.
+    ///
+    /// Uses the same staleness rule as the write path (`skill_needs_update`:
+    /// version *and* body hash) so "All tools up to date" is only printed when
+    /// the write path would really skip every file. Previously this only
+    /// checked that one SKILL.md existed, so content edits under an unchanged
+    /// version were never applied without `--force`.
     fn check_version_status(
         &self,
         project_path: &Path,
         configured_tools: &[String],
+        workflow_filter: Option<&[String]>,
     ) -> Vec<String> {
+        let global_cfg = global_config::get_global_config();
+        let delivery = match global_cfg.delivery {
+            global_config::Delivery::Both => CommandDelivery::Both,
+            global_config::Delivery::Skills => CommandDelivery::Skills,
+            global_config::Delivery::Commands => CommandDelivery::Commands,
+        };
+        let current_version = crate::templates::generation::speckit_generated_by_version();
+        let skill_entries = crate::templates::generation::get_skill_templates(workflow_filter);
+
         configured_tools
             .iter()
             .filter(|tool_id| {
-                // Simple check: look for skill directories and compare
-                if let Some(tool) = AI_TOOLS.iter().find(|t| t.value == **tool_id)
+                let Some(tool) = AI_TOOLS.iter().find(|t| t.value == **tool_id) else {
+                    return false;
+                };
+                if command_generation::should_generate_skills_for_tool(tool_id, delivery)
                     && let Some(ref skills_dir) = tool.skills_dir
                 {
                     let skills_path = project_path.join(skills_dir).join("skills");
-                    // If skills dir exists but is empty or missing SKILL.md files,
-                    // mark as needing update
-                    if skills_path.exists() {
-                        let has_any_skill = migration::ALL_WORKFLOWS.iter().any(|w| {
-                            if let Some(dir_name) = migration::workflow_to_skill_dir(w) {
-                                skills_path.join(dir_name).join("SKILL.md").exists()
-                            } else {
-                                false
-                            }
-                        });
-                        return !has_any_skill;
+                    let stale_skill = skill_entries.iter().any(|entry| {
+                        let skill_file = skills_path.join(&entry.dir_name).join("SKILL.md");
+                        // Err => missing or unreadable: the write path writes it.
+                        Self::skill_needs_update(&skill_file, &entry.workflow_id, &current_version)
+                            .unwrap_or(true)
+                    });
+                    if stale_skill {
+                        return true;
                     }
+                }
+                if command_generation::should_generate_commands_for_tool(tool_id, delivery)
+                    && let Some(adapter) = CommandAdapterRegistry::global().get(tool_id)
+                {
+                    let contents =
+                        crate::templates::generation::get_command_contents(workflow_filter);
+                    let generated = command_generation::generate_commands(&contents, adapter);
+                    if generated
+                        .iter()
+                        .any(|cmd| !project_path.join(&cmd.path).exists())
+                    {
+                        return true;
+                    }
+                }
+                // Leftover command files from an earlier delivery mode still
+                // need reconciling even when every current file is fresh.
+                if command_generation::should_reconcile_command_files_for_tool(tool_id, delivery)
+                    && let Some(adapter) = CommandAdapterRegistry::global().get(tool_id)
+                    && let Some((dir, _)) = adapter.get_file_path("").rsplit_once('/')
+                    && project_path.join(dir).exists()
+                {
+                    return true;
                 }
                 false
             })
@@ -447,10 +490,14 @@ impl UpdateCommand {
         if !expected_workflow_contains(&parsed.name, expected_workflow) {
             return Ok(false);
         }
-        match parsed.generated_by {
-            Some(v) if v == current_version => Ok(false),
-            _ => Ok(true),
+        if parsed.generated_by.as_deref() != Some(current_version) {
+            return Ok(true);
         }
+        // Same version is not enough: templates change between releases (and
+        // between builds of the same release). The body hash catches an edit
+        // that left `generatedBy` untouched; a file without the hash was
+        // emitted before the field existed and is regenerated once.
+        Ok(!crate::templates::generation::skill_body_matches_content_hash(&content))
     }
 
     /// True when the file's frontmatter looks like one our generator emitted
