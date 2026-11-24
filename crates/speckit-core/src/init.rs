@@ -460,7 +460,7 @@ impl InitCommand {
                 })?;
 
                 let skill_entries =
-                    crate::templates::generation::get_skill_templates(workflow_filter);
+                    crate::templates::generation::get_installation_skill_templates(workflow_filter);
                 let generated_by_version =
                     crate::templates::generation::speckit_generated_by_version();
                 for entry in &skill_entries {
@@ -468,10 +468,10 @@ impl InitCommand {
                     fs::create_dir_all(&skill_dir)?;
 
                     let skill_file = skill_dir.join("SKILL.md");
-                    let content = crate::templates::generation::generate_skill_content(
+                    let content = crate::templates::generation::generate_skill_content_for_tool(
                         &entry.template,
                         &generated_by_version,
-                        None,
+                        &tool.value,
                     );
                     if !skill_file.exists() || self.force {
                         fs::write(&skill_file, content)?;

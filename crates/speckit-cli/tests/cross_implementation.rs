@@ -950,3 +950,42 @@ fn init_and_update_keep_managed_skills_in_sync_without_touching_custom_skills() 
     );
     assert_eq!(std::fs::read_to_string(&custom).unwrap(), custom_contents);
 }
+
+#[test]
+fn cli_guide_is_installed_and_restored_by_update() {
+    let (_temp, project, _nested, config_home, data_home) = fixture();
+    let initialized = run_cli(
+        &project,
+        &config_home,
+        &data_home,
+        &["init", ".", "--tools", "claude,codex", "--force"],
+    );
+    assert!(
+        initialized.status.success(),
+        "{}",
+        String::from_utf8_lossy(&initialized.stderr)
+    );
+    let guide = project.join(".claude/skills/speckit-cli/SKILL.md");
+    let original = std::fs::read_to_string(&guide).unwrap();
+    let frontmatter = original.split("---").nth(1).unwrap();
+    assert!(
+        frontmatter
+            .lines()
+            .any(|line| line == "user-invocable: false")
+    );
+    let codex =
+        std::fs::read_to_string(project.join(".agents/skills/speckit-cli/SKILL.md")).unwrap();
+    assert!(!codex.contains("user-invocable:"));
+    assert!(!project.join(".claude/commands/specx").exists());
+    std::fs::remove_file(&guide).unwrap();
+    let updated = run_cli(&project, &config_home, &data_home, &["update", "."]);
+    assert!(
+        updated.status.success(),
+        "{}",
+        String::from_utf8_lossy(&updated.stderr)
+    );
+    assert_eq!(std::fs::read_to_string(&guide).unwrap(), original);
+    let again = run_cli(&project, &config_home, &data_home, &["update", "."]);
+    assert!(again.status.success());
+    assert!(String::from_utf8_lossy(&again.stdout).contains("up to date"));
+}

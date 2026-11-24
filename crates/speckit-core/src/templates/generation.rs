@@ -77,6 +77,23 @@ fn entry(workflow_id: &str, template: super::types::SkillTemplate) -> SkillTempl
     }
 }
 
+/// Installation includes the CLI guide independently of the workflow profile.
+/// It is a skill-only companion, not a workflow or slash command.
+pub fn get_installation_skill_templates(
+    workflow_filter: Option<&[String]>,
+) -> Vec<SkillTemplateEntry> {
+    let mut skills = get_skill_templates(workflow_filter);
+    skills.push(entry("cli", super::types::SkillTemplate {
+        name: "speckit-cli".into(),
+        description: "Discover Speckit CLI commands, explain options, and troubleshoot CLI usage. For proposing, implementing, updating, syncing, or archiving changes, use the matching workflow skill.".into(),
+        instructions: include_str!("cli.md").trim_end().into(),
+        license: Some("MIT".into()),
+        compatibility: Some("Requires speckit CLI.".into()),
+        metadata: None,
+    }));
+    skills
+}
+
 /// Command template with workflow ID mapping.
 ///
 /// A command template entry that command generation can filter by workflow.
@@ -288,11 +305,27 @@ fn escape_yaml_string(input: &str) -> String {
         .replace('\t', "\\t")
 }
 
-/// Returns the canonical set of skill directories under the tool's skills root
-/// that Speckit owns. Used by init/update to know which directories to clean up
-/// when a workflow is removed from the registry.
+/// Apply tool-specific visibility without changing the shared skill body.
+pub fn generate_skill_content_for_tool(
+    template: &super::types::SkillTemplate,
+    version: &str,
+    tool_id: &str,
+) -> String {
+    let content = generate_skill_content(template, version, None);
+    if tool_id == "claude" && template.name == "speckit-cli" {
+        content.replacen(
+            "\nallowed-tools:",
+            "\nuser-invocable: false\nallowed-tools:",
+            1,
+        )
+    } else {
+        content
+    }
+}
+
+/// All skill directories owned by Speckit, including the CLI companion.
 pub fn managed_skill_dir_names() -> Vec<String> {
-    get_skill_templates(None)
+    get_installation_skill_templates(None)
         .into_iter()
         .map(|e| e.dir_name)
         .collect()
@@ -599,9 +632,24 @@ mod tests {
     }
 
     #[test]
-    fn managed_skill_dir_names_is_twelve() {
+    fn managed_skill_dir_names_includes_cli_guide() {
         let dirs = managed_skill_dir_names();
-        assert_eq!(dirs.len(), 12);
+        assert_eq!(dirs.len(), 13);
+        assert!(dirs.iter().any(|dir| dir == "speckit-cli"));
+    }
+
+    #[test]
+    fn cli_guide_is_independent_of_workflow_selection() {
+        for filter in [vec![], vec!["explore".to_string()]] {
+            let skills = get_installation_skill_templates(Some(&filter));
+            assert_eq!(skills.len(), filter.len() + 1);
+            assert_eq!(skills.last().unwrap().dir_name, "speckit-cli");
+            assert!(
+                get_command_templates(Some(&filter))
+                    .iter()
+                    .all(|entry| entry.id != "cli")
+            );
+        }
     }
 
     #[test]

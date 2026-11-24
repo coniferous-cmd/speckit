@@ -271,7 +271,8 @@ impl UpdateCommand {
             global_config::Delivery::Commands => CommandDelivery::Commands,
         };
         let current_version = crate::templates::generation::speckit_generated_by_version();
-        let skill_entries = crate::templates::generation::get_skill_templates(workflow_filter);
+        let skill_entries =
+            crate::templates::generation::get_installation_skill_templates(workflow_filter);
 
         configured_tools
             .iter()
@@ -365,7 +366,8 @@ impl UpdateCommand {
             let skills_path = project_path.join(skills_dir).join("skills");
             std::fs::create_dir_all(&skills_path)?;
 
-            let skill_entries = crate::templates::generation::get_skill_templates(workflow_filter);
+            let skill_entries =
+                crate::templates::generation::get_installation_skill_templates(workflow_filter);
             let generated_by_version = crate::templates::generation::speckit_generated_by_version();
             let current_version = generated_by_version.clone();
             let canonical_dirs: std::collections::HashSet<String> =
@@ -375,10 +377,10 @@ impl UpdateCommand {
                 let skill_dir = skills_path.join(&entry.dir_name);
                 std::fs::create_dir_all(&skill_dir)?;
                 let skill_file = skill_dir.join("SKILL.md");
-                let desired = crate::templates::generation::generate_skill_content(
+                let desired = crate::templates::generation::generate_skill_content_for_tool(
                     &entry.template,
                     &generated_by_version,
-                    None,
+                    tool_id,
                 );
 
                 let should_write = self.force
